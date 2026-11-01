@@ -1,11 +1,23 @@
 import type { KeyboardConfig } from '../types/keyboard';
 import type { StandardLightingSettings, PerKeyColors } from './LightingCodec';
 import type { FirmwareCode } from '../types/keycode';
-import type { KeyboardDevice } from './KeyboardDevice';
+import { OperationQueue } from './OperationQueue';
+import {
+  assertLightingSupported,
+  validateColorUpdate,
+  validateLightingRequest,
+  validateLightingSettings,
+  validateMappings,
+  type ApplyResult,
+  type KeyboardDevice,
+  type WriteState,
+} from './KeyboardDevice';
 
 /**
- * Demo keyboard device that simulates all operations without hardware
- * Used for demo mode to let users explore the UI without a physical keyboard
+ * Demo keyboard device that simulates all operations without hardware.
+ * Used for demo mode to let users explore the UI without a physical keyboard.
+ * It applies the same validation and queue ordering as the real device but never
+ * touches hardware or browser storage, so every ApplyResult has `persisted: false`.
  */
 export class DemoKeyboardDevice implements KeyboardDevice {
   readonly id: string;
@@ -25,6 +37,9 @@ export class DemoKeyboardDevice implements KeyboardDevice {
 
   notify?: () => void;
   onDisconnect?: () => void;
+
+  private queue = new OperationQueue();
+  private applying = false;
 
   constructor(config: KeyboardConfig) {
     this.config = config;
@@ -48,6 +63,10 @@ export class DemoKeyboardDevice implements KeyboardDevice {
         sleep: 2, // 10 min default
       };
     }
+  }
+
+  get writeState(): WriteState {
+    return this.applying ? 'applying' : 'idle';
   }
 
   /**
@@ -94,108 +113,98 @@ export class DemoKeyboardDevice implements KeyboardDevice {
     // Demo device has no real event listeners to clean up
   }
 
-  /**
-   * Simulate setting a key mapping (no hardware write, no persistence)
-   */
+  async applyMappings(mappings: Map<number, FirmwareCode>): Promise<ApplyResult> {
+    const candidate = validateMappings(this.config, mappings);
+    return this.queue.enqueue(() => this.commitMappings(candidate, 150));
+  }
+
+  async applyLighting(settings: StandardLightingSettings, colors?: PerKeyColors): Promise<ApplyResult> {
+    const { settings: s, colors: c } = validateLightingRequest(this.config, settings, colors);
+    return this.queue.enqueue(() => this.commitLighting(s, c));
+  }
+
   async setMapping(keyIndex: number, fwCode: FirmwareCode): Promise<void> {
-    this.isMappingLoading = true;
-    this.notify?.();
-
-    // Simulate network delay for realism
-    await this.simulateDelay(100);
-
-    try {
-      this.mappings.set(keyIndex, fwCode);
-    } finally {
-      this.isMappingLoading = false;
-      this.notify?.();
-    }
+    validateMappings(this.config, new Map([[keyIndex, fwCode]]));
+    await this.queue.enqueue(() => {
+      const candidate = new Map(this.mappings);
+      candidate.set(keyIndex, fwCode);
+      return this.commitMappings(candidate, 100);
+    });
   }
 
-  /**
-   * Simulate clearing a key mapping (no persistence)
-   */
   async clearMapping(keyIndex: number): Promise<void> {
-    this.isMappingLoading = true;
-    this.notify?.();
-
-    await this.simulateDelay(100);
-
-    try {
-      this.mappings.delete(keyIndex);
-    } finally {
-      this.isMappingLoading = false;
-      this.notify?.();
-    }
+    await this.queue.enqueue(async () => {
+      if (!this.mappings.has(keyIndex)) return;
+      const candidate = new Map(this.mappings);
+      candidate.delete(keyIndex);
+      await this.commitMappings(candidate, 100);
+    });
   }
 
-  /**
-   * Simulate clearing all mappings (no persistence)
-   */
   async clearAll(): Promise<void> {
-    this.isMappingLoading = true;
-    this.notify?.();
-
-    await this.simulateDelay(150);
-
-    try {
-      this.mappings.clear();
-    } finally {
-      this.isMappingLoading = false;
-      this.notify?.();
-    }
+    await this.queue.enqueue(() => this.commitMappings(new Map(), 150));
   }
 
-  /**
-   * Get mapping for a key index
-   */
   getMapping(keyIndex: number): FirmwareCode | undefined {
     return this.mappings.get(keyIndex);
   }
 
-  /**
-   * Check if a key has a custom mapping
-   */
   hasMapping(keyIndex: number): boolean {
     return this.mappings.has(keyIndex);
   }
 
-  /**
-   * Simulate updating lighting settings (no hardware write, no persistence)
-   */
   async setLighting(settings: StandardLightingSettings): Promise<void> {
-    await this.simulateDelay(80);
-
-    // Update local state (no persistence in demo mode)
-    this.lightingSettings = settings;
+    assertLightingSupported(this.config);
+    const s = validateLightingSettings(this.config, settings);
+    await this.queue.enqueue(() => this.commitLighting(s, undefined));
   }
 
-  /**
-   * Simulate updating per-key colors (no hardware write)
-   */
   async setPerKeyColors(colors: PerKeyColors): Promise<void> {
-    await this.simulateDelay(100);
-    this.perKeyColors = colors;
+    const c = validateColorUpdate(this.config, colors);
+    await this.queue.enqueue(() => this.commitLighting(undefined, c));
   }
 
-  /**
-   * Simulate setting color for a single key
-   */
   async setKeyColor(bIndex: number, r: number, g: number, b: number): Promise<void> {
-    const newColors = {
-      ...this.perKeyColors,
-      [bIndex]: { r, g, b },
-    };
-    await this.setPerKeyColors(newColors);
+    validateColorUpdate(this.config, { [bIndex]: { r, g, b } });
+    await this.queue.enqueue(() =>
+      this.commitLighting(undefined, { ...this.perKeyColors, [bIndex]: { r, g, b } })
+    );
   }
 
-  /**
-   * Simulate clearing color for a single key
-   */
   async clearKeyColor(bIndex: number): Promise<void> {
-    const newColors = { ...this.perKeyColors };
-    delete newColors[bIndex];
-    await this.setPerKeyColors(newColors);
+    // Off is a valid color for any physical key; this checks support and membership.
+    validateColorUpdate(this.config, { [bIndex]: { r: 0, g: 0, b: 0 } });
+    await this.queue.enqueue(() => {
+      const colors = { ...this.perKeyColors };
+      delete colors[bIndex];
+      return this.commitLighting(undefined, colors);
+    });
+  }
+
+  private async commitMappings(candidate: Map<number, FirmwareCode>, delayMs: number): Promise<ApplyResult> {
+    this.applying = true;
+    this.isMappingLoading = true;
+    this.notify?.();
+    await this.simulateDelay(delayMs);
+    this.mappings = candidate;
+    this.applying = false;
+    this.isMappingLoading = false;
+    this.notify?.();
+    return { persisted: false };
+  }
+
+  private async commitLighting(
+    settings: StandardLightingSettings | undefined,
+    colors: PerKeyColors | undefined
+  ): Promise<ApplyResult> {
+    this.applying = true;
+    this.notify?.();
+    await this.simulateDelay(colors ? 100 : 80);
+    if (settings) this.lightingSettings = settings;
+    if (colors) this.perKeyColors = colors;
+    this.applying = false;
+    this.notify?.();
+    return { persisted: false };
   }
 
   /**

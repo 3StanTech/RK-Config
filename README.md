@@ -1,318 +1,150 @@
-# Kludge Knight
+# RK Configurator
 
-**Unofficial web-based key remapper for Royal Kludge keyboards**
+**Unofficial browser-based key remapper and lighting editor for Royal Kludge keyboards**
 
-Remap any key on your Royal Kludge keyboard directly in your browser. No installation required.
+RK Configurator is a modified version of [KludgeKnight](https://github.com/vinc3m1/kludgeknight) by Vince Mi (upstream project). It runs in your browser and talks to the keyboard over WebHID, and nothing is sent to a keyboard until you press **Apply**.
 
-🌐 **Hosted via Github Pages at [kludgeknight.com](https://www.kludgeknight.com/).** Includes a demo mode to try different keyboards without actually connecting them.
+Source for this modified version: [github.com/3StanTech/RK-Config](https://github.com/3StanTech/RK-Config).
 
 > ⚠️ **Disclaimer**: This is unofficial software and is not affiliated with, endorsed by, or connected to Royal Kludge in any way. Use at your own risk.
 
-> **Note**: I only have the RK F68 and S79 keyboards to test on. While the key mappings and lighting configurations are sourced from the official RK software and should work with other RK keyboards, functionality on other models has not been verified.
+> **Status**: First-release candidate. Key mapping, global lighting and per-key colors are verified on one RK61 (`258A:0055`) over USB only; no other model or connection is verified (see [Feature evidence](#feature-evidence)). Its source is public at [3StanTech/RK-Config](https://github.com/3StanTech/RK-Config); no hosted site has been chosen yet.
 
-## ✨ Features
+## ✨ What this version adds
 
-- 🌐 **Runs in your browser** - No downloads or installation
-- 🎹 **Visual keyboard layout** - See your keyboard and click to remap
-- 💡 **Lighting control** - Adjust brightness, speed, colors, and lighting modes
-- 🗺️ **Key configurations from official RK software** - Keyboard layouts and configurations pulled from the official Royal Kludge Windows app
+Compared with upstream KludgeKnight:
 
-### ⚠️ Important Limitations
+1. **Per-key colors**: paint individual keys, fill or clear them, on models with an established custom lighting mode.
+2. **Built-in palettes**: two starting arrangements (WASD blue with the rest white; alternating cyan/purple columns). You can edit every color.
+3. **Modifier chords**: map a key to left/right Control, Shift, Option/Alt and Command/Win plus a base key (for example ⌘ Command + C).
+4. **Staged changes with Apply**: edits stay pending until you press Apply. Key Mapping and Lighting each have their own Apply and Discard, so applying one never sends the other's pending edits. Every keymap send asks for confirmation first, and lighting can be resent on purpose when nothing is pending.
+5. **Remembered per-key colors**: the last successfully applied keymap, lighting and per-key colors are kept in this browser.
+6. **Feature evidence labels**: each model shows how well each feature is actually backed, so a model listed in RK's files is not presented as proven.
 
-**The app cannot read your existing key mappings from the keyboard.** Due to firmware limitations, we can only write new mappings, not read what's currently set.
+Kept from upstream: visual keyboard layout, global lighting (mode, brightness, speed, sleep, color), a demo mode, and keyboard configurations taken from the official RK Windows software.
 
-This means:
-- If you've already remapped keys using RK software, those mappings won't be visible here
-- The app always starts with the default keyboard layout (unless you've previously used this app on this browser)
-- Any remapping you do will overwrite what's currently on the keyboard
-
-**Your remappings are saved in your browser's localStorage** and will be restored when you reconnect your keyboard. However:
-- Clearing your browser data will erase these saved mappings
-- The mappings are browser-specific (won't sync across different browsers or devices)
-- The mappings in the keyboard's hardware memory are permanent until overwritten
-
-**Every change writes the entire keymap** to the keyboard hardware. Even when you change a single key, the complete key mapping for your entire keyboard is sent. This is how the RK firmware works - it doesn't support updating individual keys.
-
-## 📸 Screenshots
-
-<table align="center">
-  <tr>
-    <td valign="top" width="49%"><img src="screenshot1.png" width="100%" alt="Kludge Knight Screenshot 1"></td>
-    <td valign="top" width="49%"><img src="screenshot2.png" width="100%" alt="Kludge Knight Screenshot 2"></td>
-  </tr>
-</table>
-
-## 🚀 Getting Started
+## 🚀 Using it
 
 ### Requirements
 
-- **Browser**: Chrome, Edge, or Opera (WebHID support required)
-- **Keyboard**: Royal Kludge keyboard with USB cable
+- **Browser**: desktop Chrome, Edge or Opera (WebHID). Firefox, Safari and mobile browsers do not support WebHID.
+- **Connection**: USB cable. Bluetooth and 2.4 GHz are not supported.
+- **Keyboard**: a model with a shipped RK configuration that exposes the classic RK configuration report (feature report `0x0A`, 64-byte payload) on an accepted collection. The default is usage page `0x0001` / usage `0x0080`. The RK61 `258A:0055` puts it on a vendor-defined `FF00:0001` collection instead, which is accepted for that model only. Keyboards using other or newer RK protocols are refused before anything is sent; use RK's own software for those.
 
-### How to Use
+### Steps
 
-1. **Visit the app** at [kludgeknight.com](https://www.kludgeknight.com/)
-2. **Click "Connect Keyboard"** and select your keyboard from the list
-3. **Remap keys**: Click any key on the diagram and select a new function
-4. **Adjust lighting** (if supported): Switch to the "Lighting" tab to control modes, brightness, speed, and colors
-5. **Done!** All changes are saved to your keyboard immediately
+1. Open the app (for now, run it locally; see [For developers](#-for-developers)).
+2. Click **Connect Keyboard** and pick the keyboard in the browser dialog. Connecting sends nothing.
+3. Stage edits on the **Key Mapping** or **Lighting** tab. The pending bar shows how many changes are waiting.
+4. Press **Apply to keyboard** on that tab, or **Discard** to drop its pending edits without sending anything. Key Mapping then asks you to confirm: **Cancel** (focused first, also Escape) sends nothing and keeps your edits pending; **Send keymap (9 reports)** sends the whole map.
 
-### Resetting Keys
+Resetting a key or all keys to default is also staged; it only reaches the keyboard after Apply and the same confirmation. "Default" means the layout from RK's configuration file, sent as a normal whole-map write. It is not the keyboard's own hardware factory reset.
 
-- **Single key**: Click any key and select "Set to Default" to reset it to its original function
-- **All keys**: Click "Reset All Keys to Default" button on the Key Mapping tab
+**Resending lighting:** when no lighting edits are pending, the Lighting bar offers **Resend lighting** (the shown settings match what this browser last sent) or **Send shown lighting** (nothing was sent from this browser yet, so the shown settings are app defaults). Use it when the keyboard's lighting was changed elsewhere, for example by Fn shortcuts or a keyboard reset. It sends 1 report, or 8 (1 + 7) when the shown mode is the model's custom per-key mode, and never sends the keymap or touches pending key edits. Key Mapping has no equivalent: a keymap is sent only when key edits are pending or as **Retry Apply** after a failed transfer, always with confirmation.
 
-## ❓ FAQ
+**Try without a keyboard:** demo mode lets you explore any listed model. Apply is only simulated there: nothing is written to hardware or saved in the browser, and a demo apply never counts as evidence that a model works.
 
-### Which browsers work?
+### What Apply sends
 
-- ✅ **Chrome** (version 89+)
-- ✅ **Edge** (version 89+)
-- ✅ **Opera** (version 75+)
-- ❌ **Firefox** - Not supported (no WebHID)
-- ❌ **Safari** - Not supported (no WebHID)
+- **Key Mapping Apply replaces the whole keymap.** This app writes keymaps with the classic RK report format, which only carries a complete map and cannot read the keyboard back, so every Apply sends the full map (nine reports), including keys you didn't touch. Whether a given firmware has some other update method is unknown; this app doesn't use one.
+- **Lighting Apply** sends one global lighting report. In the model's custom per-key mode it sends the global report first, then seven per-key color reports. Per-key colors painted while another mode is selected are not sent.
+- Colors are stored as ordinary RGB. On the RK61 `0055` the per-key reports put each key's bytes in G, R, B order, because the keyboard was observed reading them that way. The global lighting color stays R, G, B. Details are in [`docs/lighting-protocol.md`](docs/lighting-protocol.md).
+- Chord modifier bits are sent exactly as chosen. There is no automatic Mac/Windows swap.
+- If a transfer fails part-way, the keyboard may be partly updated. There is no rollback, so apply again. The app saves only the area that was sent successfully.
 
-### Which keyboards are supported?
+### Before you write a keymap: tested RK61 `258A:0055` findings
 
-Any Royal Kludge keyboard that works with the official RK software should be supported, but I only own a F68 so that's what I'm testing with. The keyboard configurations are [pulled directly from the official RK Windows app](https://github.com/vinc3m1/rk-web/tree/main/public/rk/Dev), so if your keyboard works with the official software, it should work.
+These were observed on one RK61 (`258A:0055`, USB, macOS) on 2026-11-01 and 2026-11-02. They are not known to apply to other models, and the firmware mechanism behind them is unknown.
 
-<details>
-<summary>View full list of supported keyboards</summary>
+- **Any keymap send turns off the keyboard's native Mac mode.** The app sends the whole map, using the Windows-style modifier positions from RK's configuration for every key you didn't change. On the tested unit, a send that changed only CapsLock → Escape also swapped left Win/Alt: the keys that sent `AltLeft`/`MetaLeft` (Option/Command) before now sent `MetaLeft`/`AltLeft`. The app doesn't swap modifiers automatically.
+- **Fn+S, unplugging and resending the default layout did not bring Mac mode back.** Fn+S alone, app Disconnect then Fn+S, and power-cycle then Fn+S all still produced the swapped positions. Sending the app's default layout restored CapsLock but not the Mac positions.
+- **What a keymap send did, tested:** CapsLock → Escape and Menu → ⌘ Command + C both worked, untouched keys such as A were unchanged, Fn+1 still produced F1, and everything (plus a per-key palette) was the same after a power cycle. Only these keys and this one chord were checked, not every Fn function, chord or key.
+- **Recovery that worked on this unit:** RK's native reset (hold Fn+Space until the backlight flashes), then Fn+S, per the [official RK61 shortcut guide](https://rkgamingstore.com/blogs/community/rk61-key-combinations). This was observed to remove both custom remaps (CapsLock and Menu back to normal), restore left Option/Command, and change the lighting. It may also clear other onboard settings or pairing information. No other way of getting native Mac mode back was found.
+- **Restoring lighting afterwards:** resending only the original lighting (one report, no keymap) brought the lighting back and kept the Mac positions and normal keys. Use **Resend lighting** for this; don't send a keymap, because any keymap send turns Mac mode off again.
+- **The app still shows the old keymap after a native reset.** Its saved record is what this browser last sent, not a reading of the keyboard, so after a reset it can show remaps the keyboard no longer has. That is expected; there is nothing to fix by resending it.
 
-- RK-G68 Keyboard
-- RK-61 Keyboard
-- RK100RGB Keyboard
-- RK84RGB Keyboard
-- RK857 Keyboard
-- RK68RGB Bluetooth Dual Mode
-- RK71RGB Keyboard
-- RK68Plus Keyboard
-- RK71RGB Wireless
-- RK61RGB Wired Keyboard
-- RK100RGB Wireless Keyboard
-- RK71RGB Wired Keyboard
-- RK87RGB Keyboard
-- RK987RGB
-- RK987RGB Wired Keyboard
-- RK61RGB ISO Return Keyboard
-- RK-G68RGB-UK Keyboard
-- RK68RGB Wired Keyboard
-- G68RGB ISO Return Keyboard
-- RK61 RGB Bluetooth Dual Mode
-- RK100PRO Keyboard
-- RK98 RGB Keyboard
-- 68RGB Wired Keyboard
-- G87RGB Wired Keyboard
-- RK87T RGBWired Keyboard
-- G87RGB Wired Keyboard
-- RK96 RGB Keyboard
-- RK87 Keyboard
-- RK61RGB ISO ReturnWired
-- RK68Pro Keyboard
-- RK68ISO Return Keyboard
-- RK750-100RGB Keyboard
-- RK896 Keyboard
-- RK98-100KRGB N Keyboard
-- K87RGB N Keyboard
-- RK87RGB N Wired Keyboard
-- RK920RGB Keyboard
-- RK858  61   Keyboard
-- RK98Wired-100KRGB Keyboard
-- RK98Wired-100K N RGB Keyboard
-- RK61RGB N Keyboard
-- RK84N RGB Keyboard
-- RK100RGB N Keyboard
-- RK61RGB N ISO Return Keyboard
-- RK71RGB N Wired Keyboard
-- RK883RGB N Wired Keyboard
-- RK71RGB N BT Keyboard
-- G68 Keyboard
-- RK61 Keyboard
-- RK100 Keyboard
-- RK857 Single
-- RK68 Bluetooth Dual Mode
-- RK71 Keyboard
-- RK71 Bluetooth Dual Mode
-- RK-68Plus
-- RK987 Single Color
-- RK96 Keyboard
-- RK SINK104 Keyboard
-- RK61 Bluetooth Dual Mode
-- RK960 Keyboard
-- RK61ISO Return Keyboard
-- RK87(882) Keyboard
-- RK87(882) Wired Keyboard
-- RK932 Keyboard
-- RK68 a switch Keyboard
-- RK89 Keyboard
-- RK857 Single
-- RK92RGB N Keyboard
-- RK89RGB Keyboard
-- RK84Pro N RGB Keyboard
-- RK61 N RGB Bluetooth Dual Mode
-- RK Round RGB Keyboard
-- RK-H87RGB Keyboard
-- RK84 RGB ISO Return Keyboard
-- RK61plus RGB Keyboard
-- RK61 N RGB Bluetooth Dual Mode
-- RK-R87RGB Wired Keyboard
-- RK-R87 Wired Keyboard
-- RK987RGB N  Keyboard
-- RKG68RGB N Keyboard
-- RK68plus RGB N Keyboard
-- RK68RGB N Bluetooth Dual Mode
-- RK68 N ISO Return Keyboard Bluetooth
-- RK71RGB N Keyboard
-- RK-H81RGB
-- RK84RGB N Wired Keyboard
-- RK68RGB N Wired Keyboard
-- RK987RGB 2.4G N Keyboard
-- RK937RGB Wired Keyboaed
-- RK-R104 Single
-- RK-R104 RGB
-- R87RGB
-- RK104 RGB Wired
-- RK61RGB N Wired Keyboard
-- RK87RGB ISO Return Keyboard
-- RK932RGB Keyboard
-- RK-R87S
-- RK-S87 RGB Wired Keyboard
-- RK-S87 RGB Keyboard
-- RKG68 RGB N Wired Keyboard
-- RK-H81RGB-N
-- RK-M75
-- R98-RGB2.0
-- RK868RGB Wired keyboard
-- RK932RGB
-- RK-G98
-- R75RGB
-- RK-R75
-- R75RGB wired
-- RK98 Single Color Wired
-- RK-M75RGB New layout
-- RK98 Single three-mode
-- RK-S75RGB
-- RK-G98 Single three-mode
-- RK-H81RGB-N
-- RK SPLIT70 three-mode
-- RK-R65RGB
-- RK-M75 ISO Return Keyboard
-- RK S98RGB
-- RK-R104
-- RK-F68
-- RK-S108RGB
-- RK-R65RGB Wired Keyboard
-- RK-R75RGBSingle mode
-- RK98RGB ISO Keyboard
-- RK-R65RGBSingle mode
-- RK-M75N ISO Return Keyboard
-- RK-R75 ISO Return Keyboard
-- RK-S98RGB-New
-- R65RGB ISO Keyboard
-- RK104 RGB three-mode
-- RK S85
-- R87PRO
-- RK 61
-- RK N80
-- RK M87
-- R87PRO
-- RK-S98RGB ISO Return Keyboard
-- RK96 ISO Return Keyboard
-- RK61plus ISO Return Keyboard
-- R87PRO
-- Sink87G
-- RK N99
-- RK F75 three-mode
-- RK F75 Wired
-- RK F75 three-mode
-- RK M87 ISO Return Keyboard
-- RK-R87 Wired Keyboard
-- RK F75 Wired
-- RK-R87 Wired Keyboard
-- RK-S70 DE Keyboard
-- RK M87 Keyboard
-- RK T75
-- RK L75 three-mode
-- RK-R75 Keyboard
-- RK-R65 Keyboard
-- RK S85 ISO Return Keyboard
-- M65
-- RK L98 three-mode
-- M70
-- RK L75 Keyboard
-- RK M65 Keyboard
-- RK M70 Keyboard
-- R98Pro Keyboard
-- R98Pro Keyboard
-- X87 Keyboard
-- R98Pro Keyboard
-- RK S108 Keyboard
-- RK X87 Keyboard
-- RK A70 Keyboard
-- RK F99
-- R98Pro DE Keyboard
-- R98Pro FR Keyboard
-- RK-S70 Keyboard
-- RK-S70 FR Keyboard
-- RK M70 DE Keyboard
-- RK M70 FR Keyboard
-- RK-S98 DE Keyboard
-- R98Pro Keyboard
-- RK M100 Keyboard
-- RK M65 FR Keyboard
-- RK M65 DE Keyboard
-- RK-S98 TH Keyboard
-- RK-S98 RU Keyboard
-- RK-S98 Keyboard
-- RK-S98 ES Keyboard
-- RK G98 Keyboard
-- RK100 Keyboard
-- RK-S98 Keyboard
-- RK-S98 Keyboard
-- RK-S98 FR Keyboard
-- RK A72 Keyboard
-- RK L75 RU Keyboard
-- RK L75 TH Keyboard
+## ⚠️ Limitations
 
-</details>
+**This app has no configuration readback.** No readback method is established for its classic driver. The editor starts from what this browser last applied successfully, or from defaults if it never applied anything. Neither is a reading of the keyboard. Settings made in RK's software, in another browser or by a keyboard reset won't appear here, and the next Key Mapping Apply overwrites the whole keymap. Lighting shown here can be pushed again with **Resend lighting**.
 
-### Is my data safe?
+**Browser storage only.** There is one record per keyboard holding the last applied keymap, lighting and per-key colors. There are no named profiles, settings files or import/export. The record:
 
-Yes! Everything happens locally in your browser. No data is sent to any server. Your keyboard mappings are saved directly to your keyboard's hardware.
+- belongs to one browser and one site address (origin). Another browser, a cleared browser profile, or the app served from a different address (for example `localhost` vs. a public domain) starts from defaults;
+- keeps the upstream storage key format, so records from upstream on the same address stay readable;
+- may fail to save if storage is full. The Apply still reaches the keyboard; the app tells you it wasn't remembered.
 
-### Can I use this on multiple computers?
+Applied keymap and lighting live in the keyboard's own memory until overwritten or cleared by a keyboard reset. On the tested RK61 they survived a power cycle. Upstream reports that they work on other computers without the app; this version has not re-tested that.
 
-Yes! Once you remap your keys, the settings are stored in your keyboard's memory. They'll work on any computer, even without this app.
+## Feature evidence
 
-### Does it work on Mac/Linux?
+Each model in the app's catalog carries a label per feature:
 
-Yes, as long as you're using a supported browser (Chrome, Edge, or Opera).
+- **Config file only**: listed in RK's configuration files, untested with this app.
+- **Experimental · source-checked**: configuration and protocol checked from source, not yet confirmed on hardware.
+- **Verified**: physically confirmed with this app for that feature and connection.
 
-### Does this support macros?
+Nothing is labelled verified without a recorded hardware run. Verified so far, on the RK61 `258A:0055` over USB only:
 
-No. The macro protocol for RK keyboards has not been reverse engineered, and the official RK macro software is confusing and poorly documented. Even if the protocol could be figured out, macros are best handled at the OS level using dedicated tools that work with any keyboard:
-- **Windows**: [AutoHotkey](https://www.autohotkey.com/)
-- **Linux**: [AutoKey](https://github.com/autokey/autokey)
-- **macOS**: [Karabiner-Elements](https://karabiner-elements.pqrs.org/) or [BetterTouchTool](https://folivora.ai/)
+- **Key mapping:** CapsLock → Escape and Menu → ⌘ Command + C worked, an untouched key and Fn+1 → F1 were unchanged, and all survived a power cycle. Mind the Mac-mode side effect in [Before you write a keymap](#before-you-write-a-keymap-tested-rk61-258a0055-findings).
+- **Global lighting:** the owner's original mode, speed, brightness, sleep and color were restored exactly by a lighting-only send.
+- **Per-key colors:** Q red / W green / E blue / rest white and the complete WASD-blue/rest-white palette matched exactly, and the palette survived a power cycle.
 
-These tools are far more capable than keyboard-level macros and work regardless of which keyboard you're using.
+This does not cover other models, Bluetooth or 2.4 GHz, every Fn function, every chord or key, or keeping the keyboard's native Mac mode. The upstream project reports testing key mapping and global lighting on the RK F68 and S70 Split; this version has not re-tested those. Per-key colors and palettes are offered only where a custom mode is established for the exact model. Currently that is the RK61 (PID `0055`, Customize mode 14), taken from its configuration files. Other RGB models get global lighting only.
+
+The bundled catalog in `public/rk/` comes from the official RK Windows software (October 2025). The app's **Model Catalog** lists every model and its label. A listed model can be opened in demo mode, but that doesn't mean it works with this app.
+
+## Not included
+
+- Named profiles, settings files and import/export
+- Macros. The RK macro protocol has not been reverse engineered. Use OS-level tools instead: [AutoHotkey](https://www.autohotkey.com/) (Windows), [AutoKey](https://github.com/autokey/autokey) (Linux), [Karabiner-Elements](https://karabiner-elements.pqrs.org/) (macOS).
+- Reading the current configuration from the keyboard
+- Live lighting preview on the keyboard (changes are sent only on Apply)
+- Newer or other RK protocol families, Bluetooth and 2.4 GHz
+- Firmware updates or flashing
+
+## 🔒 Privacy
+
+The app is a static site with no backend, accounts, analytics or uploads. Configuration goes directly from the browser to the keyboard over WebHID, and only when you press Apply. Settings stay in browser localStorage. Theme fonts other than the bundled Inter are fetched from Google Fonts when you select such a theme.
 
 ## 🐛 Troubleshooting
 
-**Keyboard not detected?**
-- Make sure you're using Chrome, Edge, or Opera
+**Keyboard not detected or refused?**
+- Use desktop Chrome, Edge or Opera, connected by USB (not Bluetooth/2.4 GHz)
 - Try a different USB port or cable
-- Check that your keyboard is in wired mode (not Bluetooth)
+- A refusal message means the model or its protocol is not supported by this app
 
-**Changes not applying?**
-- Disconnect and reconnect your keyboard
-- Try clicking "Reset All Keys to Default" and remapping again
+**Changes not taking effect?**
+- Check the pending bar and its error or status message after Apply
+- After a failed transfer, use **Retry Apply**; if lighting was changed on the keyboard itself, use **Resend lighting**
+
+## 👨‍💻 For developers
+
+Requires [Bun](https://bun.sh/).
+
+```bash
+# Install exactly the locked dependencies
+bun install --frozen-lockfile
+
+# Dev server on http://127.0.0.1:5173 (loopback only)
+bun run dev
+
+# Lint, typecheck, test and build
+bun run validate
+
+# Static build into dist/
+bun run build
+```
+
+No public site address is configured. Canonical and structured-data URLs are added only when `SITE_URL` is set at build time to a site you own. The GitHub Pages workflow (`.github/workflows/deploy.yml`) runs only on manual dispatch and validates before deploying. Pull requests are checked by `pr-check.yml`.
 
 ## 📄 License
 
 ```
 Kludge Knight - Browser-based Software for Royal Kludge Keyboards
 Copyright (C) 2025 Vince Mi (vinc3m1)
+
+RK Configurator is a modified version of Kludge Knight (2026),
+distributed under the same license.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -325,27 +157,11 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU General Public License for more details.
 ```
 
+The full license text is in [`LICENSE`](LICENSE). Anyone distributing this modified version, including hosting it publicly, must also make its corresponding source available under the GPL. This modified version's corresponding source is at [github.com/3StanTech/RK-Config](https://github.com/3StanTech/RK-Config). The original KludgeKnight source is upstream at [github.com/vinc3m1/kludgeknight](https://github.com/vinc3m1/kludgeknight).
+
 ## 🙏 Acknowledgments
 
-This project was inspired by [Rangoli](https://github.com/rnayabed/rangoli) by Debayan Sutradhar. The protocol understanding and WebHID connection parameters came from studying that project.
+- [KludgeKnight](https://github.com/vinc3m1/kludgeknight) by Vince Mi, the upstream project this version modifies.
+- [Rangoli](https://github.com/rnayabed/rangoli) by Debayan Sutradhar, which inspired upstream. The protocol understanding and WebHID connection parameters came from studying it.
 
-**Derivative work:** `src/models/BufferCodec.ts` contains code ported from Rangoli's `keyboardconfiguratorcontroller.cpp`. All other code was written independently for this project.
-
----
-
-## 👨‍💻 For Developers
-
-Want to run this locally or contribute?
-
-```bash
-# Install dependencies
-bun install
-
-# Start dev server
-bun run dev
-
-# Build for production
-bun run build
-```
-
-See the source code for technical details.
+**Derivative work:** `src/models/BufferCodec.ts` contains code ported from Rangoli's `keyboardconfiguratorcontroller.cpp`.

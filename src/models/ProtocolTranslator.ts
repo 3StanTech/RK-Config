@@ -3,12 +3,36 @@ import { BufferCodec } from './BufferCodec';
 import { LightingCodec, type StandardLightingSettings, type PerKeyColors } from './LightingCodec';
 import type { FirmwareCode } from '../types/keycode';
 
+export type TransferArea = 'keymap' | 'lighting';
+
+/**
+ * Report-count record of the most recent transfer. Holds counts and packet
+ * positions only, never report contents.
+ */
+export interface TransferRecord {
+  area: TransferArea;
+  /** Reports the transfer intended to send. */
+  planned: number;
+  /** Reports handed to sendFeatureReport (including one that then failed). */
+  attempted: number;
+  /** Reports whose sendFeatureReport resolved. */
+  sent: number;
+  ok: boolean;
+}
+
+function isDevelopment(): boolean {
+  return import.meta.env?.DEV === true;
+}
+
 /**
  * Translates profile mappings to HID buffers and sends to keyboard
  */
 export class ProtocolTranslator {
   private device: HIDDevice;
   private config: KeyboardConfig;
+
+  /** Most recent transfer, used to tell "nothing sent" from "partially sent". */
+  lastTransfer: TransferRecord | null = null;
 
   constructor(device: HIDDevice, config: KeyboardConfig) {
     this.device = device;
@@ -22,14 +46,7 @@ export class ProtocolTranslator {
    */
   async sendProfile(mappings: Map<number, FirmwareCode>): Promise<void> {
     const buffers = BufferCodec.encode(mappings, this.config);
-
-    // Send all 9 buffers sequentially using feature reports
-    // The report ID (0x0a) is in buffer[0], we need to extract it and pass the rest
-    for (let i = 0; i < 9; i++) {
-      const reportId = buffers[i][0];
-      const data = buffers[i].slice(1); // Data without report ID
-      await this.device.sendFeatureReport(reportId, data);
-    }
+    await this.sendReports('keymap', buffers);
   }
 
   /**
@@ -37,11 +54,7 @@ export class ProtocolTranslator {
    * Encodes settings into 1 HID buffer and sends via feature report
    */
   async sendStandardLighting(settings: StandardLightingSettings): Promise<void> {
-    const buffer = LightingCodec.encodeStandardLighting(settings);
-
-    const reportId = buffer[0];
-    const data = buffer.slice(1); // Data without report ID
-    await this.device.sendFeatureReport(reportId, data);
+    await this.sendReports('lighting', [LightingCodec.encodeStandardLighting(settings)]);
   }
 
   /**
@@ -49,13 +62,41 @@ export class ProtocolTranslator {
    * Encodes colors into 7 HID buffers and sends sequentially via feature reports
    */
   async sendCustomRGB(colors: PerKeyColors): Promise<void> {
-    const buffers = LightingCodec.encodeCustomRGB(colors);
+    await this.sendReports('lighting', LightingCodec.encodeCustomRGB(colors));
+  }
 
-    // Send all 7 buffers sequentially using feature reports
-    for (let i = 0; i < buffers.length; i++) {
-      const reportId = buffers[i][0];
-      const data = buffers[i].slice(1); // Data without report ID
-      await this.device.sendFeatureReport(reportId, data);
+  /**
+   * Send one lighting transaction: the global report (if settings are given)
+   * followed by the seven per-key color reports (if colors are given), as one
+   * ordered sequence with no other writes interleaved.
+   */
+  async sendLighting(settings?: StandardLightingSettings, colors?: PerKeyColors): Promise<void> {
+    const buffers: Uint8Array[] = [];
+    if (settings) buffers.push(LightingCodec.encodeStandardLighting(settings));
+    if (colors) buffers.push(...LightingCodec.encodeCustomRGB(colors));
+    await this.sendReports('lighting', buffers);
+  }
+
+  /**
+   * Send already-encoded buffers in order. The report ID (0x0a) is buffer[0];
+   * sendFeatureReport receives the remaining 64 bytes.
+   */
+  private async sendReports(area: TransferArea, buffers: Uint8Array[]): Promise<void> {
+    const record: TransferRecord = { area, planned: buffers.length, attempted: 0, sent: 0, ok: false };
+    this.lastTransfer = record;
+    try {
+      for (const buffer of buffers) {
+        record.attempted++;
+        await this.device.sendFeatureReport(buffer[0], buffer.slice(1));
+        record.sent++;
+      }
+      record.ok = true;
+    } finally {
+      if (isDevelopment()) {
+        // Serialized so the inspector shows the values, not "Object".
+        // Counts, area and 1-based packet indexes only; never report contents.
+        console.debug('[rk-transfer]', JSON.stringify({ ...record, packets: buffers.map(b => b[2]) }));
+      }
     }
   }
 }

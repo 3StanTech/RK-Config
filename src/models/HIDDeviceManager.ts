@@ -2,6 +2,34 @@ import type { KeyboardConfig } from '../types/keyboard';
 import { HIDKeyboardDevice } from './HIDKeyboardDevice';
 import { parseKBIni } from '../utils/kbIniParser';
 import { WebHIDNotAvailableError, UnsupportedKeyboardError, UserCancelledError, DeviceOpenError } from '../errors/KludgeKnightErrors';
+import {
+  checkClassicReportShape,
+  classifyDevice,
+  classicRequestFilters,
+  formatPid,
+  hasClassicConfigInterface,
+  summarizeDescriptor,
+  type ClassicCapabilities,
+  type IncompatibleReason,
+} from '../constants/deviceCapabilities';
+
+/**
+ * Thrown before open() or construction when a device is not a compatible
+ * classic RK writer. Subclasses UnsupportedKeyboardError so existing handling applies.
+ */
+export class IncompatibleDeviceError extends UnsupportedKeyboardError {
+  readonly reason: IncompatibleReason;
+  readonly detail: string;
+  readonly guidance: string;
+  constructor(pid: string, reason: IncompatibleReason, detail: string, guidance: string) {
+    super(pid);
+    this.name = 'IncompatibleDeviceError';
+    this.message = `${guidance} (${detail})`;
+    this.reason = reason;
+    this.detail = detail;
+    this.guidance = guidance;
+  }
+}
 
 /**
  * Singleton manager for HID device lifecycle
@@ -10,6 +38,7 @@ export class HIDDeviceManager {
   private static instance: HIDDeviceManager;
   private devices: Map<string, HIDKeyboardDevice> = new Map();
   private configs: Map<string, KeyboardConfig> = new Map();
+  private capabilities: Map<string, ClassicCapabilities> = new Map();
   private opening: Map<string, Promise<HIDKeyboardDevice | null>> = new Map(); // Track devices currently being opened
   private ledManifest: string | null = null;
 
@@ -73,21 +102,16 @@ export class HIDDeviceManager {
     }
 
     try {
-      // Request device with RK vendor ID and configuration interface
-      // Usage page 0x0001 (Generic Desktop), usage 0x0080 (System Control)
-      const devices = await navigator.hid.requestDevice({
-        filters: [{
-          vendorId: 0x258a,
-          usagePage: 0x0001,
-          usage: 0x0080
-        }],
-      });
+      // RK vendor ID with the default configuration interface (0001:0080), plus
+      // interfaces explicitly observed for specific PIDs (see CLASSIC_VARIANT_METADATA).
+      const devices = await navigator.hid.requestDevice({ filters: classicRequestFilters() });
 
       if (devices.length === 0) {
         throw new UserCancelledError();
       }
 
-      const hidDevice = devices[0];
+      // The picker can return several interfaces; prefer the one with the classic report shape.
+      const hidDevice = devices.find(d => checkClassicReportShape(d).ok) ?? devices[0];
       return await this.openDevice(hidDevice);
     } catch (error) {
       // User cancelled the picker (browser throws DOMException)
@@ -114,25 +138,21 @@ export class HIDDeviceManager {
       const keyboards: HIDKeyboardDevice[] = [];
 
       for (const hidDevice of hidDevices) {
-        // Only process RK keyboards (vendor ID 0x258a) with configuration interface
-        // Check for usage page 0x0001 and usage 0x0080 (System Control)
-        if (hidDevice.vendorId === 0x258a) {
-          const hasConfigInterface = hidDevice.collections.some(
-            col => col.usagePage === 0x0001 && col.usage === 0x0080
-          );
-
-          if (hasConfigInterface) {
-            try {
-              console.log(`Attempting to open RK device: ${hidDevice.productName}`);
-              const keyboard = await this.openDevice(hidDevice);
-              if (keyboard) {
-                console.log(`Successfully opened device: ${keyboard.config.name}`);
-                keyboards.push(keyboard);
-              }
-            } catch (error) {
-              // Log but continue with other devices
-              console.warn(`Failed to open device ${hidDevice.productName}:`, error);
+        if (import.meta.env.DEV) {
+          console.debug('[rk-descriptor] scan', summarizeDescriptor(hidDevice));
+        }
+        // Only process RK keyboards exposing a configuration interface accepted for their PID
+        if (hasClassicConfigInterface(hidDevice)) {
+          try {
+            console.log(`Attempting to open RK device: ${hidDevice.productName}`);
+            const keyboard = await this.openDevice(hidDevice);
+            if (keyboard) {
+              console.log(`Successfully opened device: ${keyboard.config.name}`);
+              keyboards.push(keyboard);
             }
+          } catch (error) {
+            // Log but continue with other devices
+            console.warn(`Failed to open device ${hidDevice.productName}:`, error);
           }
         }
       }
@@ -184,13 +204,20 @@ export class HIDDeviceManager {
   private async performOpen(hidDevice: HIDDevice): Promise<HIDKeyboardDevice | null> {
     try {
       // Load config for this device on-demand
-      const pid = hidDevice.productId.toString(16).padStart(4, '0');
-      const config = await this.getConfig(pid);
+      const pid = formatPid(hidDevice.productId);
 
-      if (!config) {
-        console.warn(`No configuration found for device PID ${pid}`);
-        throw new UnsupportedKeyboardError(pid);
+      if (import.meta.env.DEV) {
+        console.debug('[rk-descriptor] open', summarizeDescriptor(hidDevice));
       }
+      // Reject incompatible report shapes before fetching config, opening, or constructing a writer.
+      const loaded = checkClassicReportShape(hidDevice).ok ? await this.getConfig(pid) : null;
+      const classification = classifyDevice(hidDevice, loaded);
+      if (!classification.supported) {
+        console.warn(`Incompatible device PID ${pid}: ${classification.reason} (${classification.detail})`);
+        throw new IncompatibleDeviceError(pid, classification.reason, classification.detail, classification.guidance);
+      }
+      // A supported classification guarantees a loaded config for this PID.
+      const config = loaded!;
 
       // Debug: Log HID collections to understand device structure
       console.log('HID Device collections:', hidDevice.collections);
@@ -218,6 +245,7 @@ export class HIDDeviceManager {
       // Create HIDKeyboardDevice instance
       const device = new HIDKeyboardDevice(hidDevice, config);
       this.devices.set(device.id, device);
+      this.capabilities.set(device.id, classification.capabilities);
 
       return device;
     } catch (error) {
@@ -231,6 +259,13 @@ export class HIDDeviceManager {
    */
   getDevice(id: string): HIDKeyboardDevice | undefined {
     return this.devices.get(id);
+  }
+
+  /**
+   * Classic capabilities established when the device was opened
+   */
+  getCapabilities(id: string): ClassicCapabilities | undefined {
+    return this.capabilities.get(id);
   }
 
   /**
@@ -250,6 +285,7 @@ export class HIDDeviceManager {
       // Clean up event listeners before removing
       device.cleanup();
       this.devices.delete(id);
+      this.capabilities.delete(id);
     }
   }
 }

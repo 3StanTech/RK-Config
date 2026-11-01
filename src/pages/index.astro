@@ -13,30 +13,30 @@ const ledManifest = buildLedManifest();
 const ledManifestJson = serializeLedManifest(ledManifest);
 
 // SEO and metadata
-const siteName = 'Kludge Knight';
-const title = 'Kludge Knight - Royal Kludge Keyboard Remapper & Lighting Controller';
-const description = 'Free browser-based key remapper and lighting controller for Royal Kludge keyboards. Works on Mac, Linux, and Windows - no installation required. Alternative to official RK software.';
-const pageUrl = Astro.url.href;
-const keywords = 'Royal Kludge, RK keyboard, key remapper, keyboard software, RGB lighting, WebHID, browser keyboard configuration, Mac, Linux, macOS, no install';
+const siteName = 'RK Configurator';
+const title = 'RK Configurator - Unofficial Royal Kludge Key Remapper & Lighting Editor';
+const description = 'Unofficial browser-based key remapper and lighting editor for Royal Kludge keyboards: modifier chords, per-key colors and an explicit Apply step. Runs locally over WebHID in Chrome, Edge or Opera.';
+const keywords = 'Royal Kludge, RK keyboard, key remapper, modifier chords, per-key RGB, lighting, WebHID, Mac, Linux, Windows';
 
-// JSON-LD structured data
-const structuredData = {
+// Canonical/structured URLs exist only when an owned site is configured (SITE_URL in astro.config.mjs).
+const canonicalUrl = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : undefined;
+
+// JSON-LD structured data (emitted only with a configured site URL)
+const structuredData = canonicalUrl && {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
   name: siteName,
   description,
-  url: pageUrl,
+  url: canonicalUrl,
   applicationCategory: 'UtilityApplication',
   operatingSystem: 'macOS, Windows, Linux',
   browserRequirements: 'Chrome, Edge, or Opera (WebHID support required)',
+  license: 'https://www.gnu.org/licenses/gpl-3.0.html',
+  isBasedOn: 'https://github.com/vinc3m1/kludgeknight',
   offers: {
     '@type': 'Offer',
     price: '0',
     priceCurrency: 'USD'
-  },
-  author: {
-    '@type': 'Person',
-    name: 'Vince Mi'
   }
 };
 ---
@@ -51,12 +51,12 @@ const structuredData = {
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="keywords" content={keywords} />
-    <link rel="canonical" href={pageUrl} />
+    {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content={pageUrl} />
+    {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:site_name" content={siteName} />
@@ -157,22 +157,8 @@ const structuredData = {
       })();
     </script>
 
-    <!-- Google tag (gtag.js) -->
-    <script is:inline async src="https://www.googletagmanager.com/gtag/js?id=G-YBJQ3DKPZR"></script>
-    <script is:inline>
-      window.dataLayer = window.dataLayer || [];
-      function gtag() {
-        // eslint-disable-next-line prefer-rest-params
-        dataLayer.push(arguments);
-      }
-      gtag('js', new Date());
-      gtag('config', 'G-YBJQ3DKPZR');
-    </script>
-
     <!-- JSON-LD Structured Data -->
-    <script is:inline type="application/ld+json" set:html={JSON.stringify(structuredData)} />
-
-    <script src="https://tweakcn.com/live-preview.min.js"></script>
+    {structuredData && <script is:inline type="application/ld+json" set:html={JSON.stringify(structuredData)} />}
   </head>
   <body>
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-0 focus:left-0 focus:z-50 focus:p-4 focus:bg-primary focus:text-primary-foreground">

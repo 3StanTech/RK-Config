@@ -1,15 +1,26 @@
 import type { KeyboardConfig } from '../types/keyboard';
-import { ProtocolTranslator } from './ProtocolTranslator';
+import { ProtocolTranslator, type TransferArea, type TransferRecord } from './ProtocolTranslator';
 import { OperationQueue } from './OperationQueue';
 import type { StandardLightingSettings, PerKeyColors } from './LightingCodec';
 import type { FirmwareCode } from '../types/keycode';
 import { loadFullProfile, saveProfile } from '../utils/profileStorage';
-import { LightingNotSupportedError, RGBNotSupportedError } from '../errors/KludgeKnightErrors';
-import type { KeyboardDevice } from './KeyboardDevice';
+import {
+  DeviceDisconnectedError,
+  assertLightingSupported,
+  validateColorUpdate,
+  validateLightingRequest,
+  validateLightingSettings,
+  validateMappings,
+  type ApplyResult,
+  type KeyboardDevice,
+  type WriteState,
+} from './KeyboardDevice';
 
 /**
  * Real Royal Kludge keyboard backed by the WebHID API.
- * Stores current key mappings and syncs to hardware.
+ *
+ * Holds the last applied state. Every hardware write runs on one OperationQueue;
+ * applied state is published and saved only after all reports of an area resolve.
  */
 export class HIDKeyboardDevice implements KeyboardDevice {
   readonly id: string;
@@ -31,6 +42,8 @@ export class HIDKeyboardDevice implements KeyboardDevice {
 
   private translator: ProtocolTranslator;
   private queue = new OperationQueue();
+  private applying = false;
+  private uncertainAreas = new Set<TransferArea>();
   private navigatorDisconnectHandler?: (event: HIDConnectionEvent) => void;
   private deviceDisconnectHandler?: () => void;
 
@@ -42,19 +55,20 @@ export class HIDKeyboardDevice implements KeyboardDevice {
     this.id = `${hidDevice.vendorId}-${hidDevice.productId}-${hidDevice.productName}${serial}`;
     this.translator = new ProtocolTranslator(hidDevice, config);
 
-    // Load saved profile from localStorage (if any)
-    const profile = loadFullProfile(this.id);
+    // Load saved applied state, filtered to this keyboard's keys and modes
+    const profile = loadFullProfile(this.id, config);
     if (profile.mappings) {
       this.mappings = profile.mappings;
+    }
+    if (profile.perKeyColors) {
+      this.perKeyColors = profile.perKeyColors;
     }
 
     // Initialize lighting - use saved settings or defaults
     if (config.lightEnabled && config.lightingModes.length > 0) {
       if (profile.lightingSettings) {
-        // Use saved lighting settings
         this.lightingSettings = profile.lightingSettings;
       } else {
-        // Use defaults
         const firstMode = config.lightingModes[0];
         this.lightingSettings = {
           modeIndex: firstMode.index,
@@ -68,7 +82,6 @@ export class HIDKeyboardDevice implements KeyboardDevice {
     }
 
     // Listen for disconnect event on navigator.hid (global disconnect events)
-    // Store handler reference for cleanup
     this.navigatorDisconnectHandler = (event: HIDConnectionEvent) => {
       if (event.device === hidDevice) {
         console.log('HID disconnect event fired for', hidDevice.productName);
@@ -80,12 +93,16 @@ export class HIDKeyboardDevice implements KeyboardDevice {
     }
 
     // Also listen on the device itself (belt and suspenders)
-    // Store handler reference for cleanup
     this.deviceDisconnectHandler = () => {
       console.log('HID device disconnect event fired for', hidDevice.productName);
       this.handleDisconnect();
     };
     hidDevice.addEventListener('disconnect', this.deviceDisconnectHandler);
+  }
+
+  get writeState(): WriteState {
+    if (this.applying) return 'applying';
+    return this.uncertainAreas.size > 0 ? 'uncertain' : 'idle';
   }
 
   private handleDisconnect() {
@@ -106,166 +123,165 @@ export class HIDKeyboardDevice implements KeyboardDevice {
    * Should be called when device is disconnected or removed
    */
   cleanup(): void {
-    // Remove navigator.hid disconnect listener
     if (this.navigatorDisconnectHandler && navigator.hid) {
       navigator.hid.removeEventListener('disconnect', this.navigatorDisconnectHandler);
       this.navigatorDisconnectHandler = undefined;
     }
 
-    // Remove device disconnect listener
     if (this.deviceDisconnectHandler) {
       this.hidDevice.removeEventListener('disconnect', this.deviceDisconnectHandler);
       this.deviceDisconnectHandler = undefined;
     }
   }
 
-  /**
-   * Set a key mapping and sync to hardware
-   * @param keyIndex - The keyboard key index (bIndex)
-   * @param fwCode - The RK firmware code to map to
-   */
+  // ---------------------------------------------------------------------------
+  // Batch apply
+  // ---------------------------------------------------------------------------
+
+  async applyMappings(mappings: Map<number, FirmwareCode>): Promise<ApplyResult> {
+    this.assertConnected();
+    const candidate = validateMappings(this.config, mappings);
+    return this.queue.enqueue(() => this.commitMappings(candidate));
+  }
+
+  async applyLighting(settings: StandardLightingSettings, colors?: PerKeyColors): Promise<ApplyResult> {
+    this.assertConnected();
+    const { settings: s, colors: c } = validateLightingRequest(this.config, settings, colors);
+    return this.queue.enqueue(() => this.commitLighting(s, c));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Single-change compatibility paths. Each computes its candidate from the
+  // applied state at execution time (not call time) so queued calls compose.
+  // ---------------------------------------------------------------------------
+
   async setMapping(keyIndex: number, fwCode: FirmwareCode): Promise<void> {
-    return this.queue.enqueue(async () => {
-      const oldValue = this.mappings.get(keyIndex);
-      this.isMappingLoading = true;
-      this.notify?.();
-      try {
-        this.mappings.set(keyIndex, fwCode);
-        await this.translator.sendProfile(this.mappings);
-        saveProfile(this.id, this.mappings);
-      } catch (error) {
-        // Rollback on failure
-        if (oldValue !== undefined) {
-          this.mappings.set(keyIndex, oldValue);
-        } else {
-          this.mappings.delete(keyIndex);
-        }
-        throw error;
-      } finally {
-        this.isMappingLoading = false;
-        this.notify?.();
-      }
+    this.assertConnected();
+    validateMappings(this.config, new Map([[keyIndex, fwCode]]));
+    await this.queue.enqueue(() => {
+      const candidate = new Map(this.mappings);
+      candidate.set(keyIndex, fwCode);
+      return this.commitMappings(candidate);
     });
   }
 
-  /**
-   * Clear a single key mapping
-   */
   async clearMapping(keyIndex: number): Promise<void> {
-    return this.queue.enqueue(async () => {
-      const oldValue = this.mappings.get(keyIndex);
-      if (oldValue === undefined) return;
-
-      this.isMappingLoading = true;
-      this.notify?.();
-      try {
-        this.mappings.delete(keyIndex);
-        await this.translator.sendProfile(this.mappings);
-        saveProfile(this.id, this.mappings);
-      } catch (error) {
-        // Rollback on failure
-        this.mappings.set(keyIndex, oldValue);
-        throw error;
-      } finally {
-        this.isMappingLoading = false;
-        this.notify?.();
-      }
+    this.assertConnected();
+    await this.queue.enqueue(async () => {
+      if (!this.mappings.has(keyIndex)) return;
+      const candidate = new Map(this.mappings);
+      candidate.delete(keyIndex);
+      await this.commitMappings(candidate);
     });
   }
 
-  /**
-   * Clear all mappings
-   */
   async clearAll(): Promise<void> {
-    return this.queue.enqueue(async () => {
-      const oldMappings = new Map(this.mappings);
-      this.isMappingLoading = true;
-      this.notify?.();
-      try {
-        this.mappings.clear();
-        await this.translator.sendProfile(this.mappings);
-        saveProfile(this.id, this.mappings);
-      } catch (error) {
-        // Rollback on failure
-        this.mappings = oldMappings;
-        throw error;
-      } finally {
-        this.isMappingLoading = false;
-        this.notify?.();
-      }
-    });
+    this.assertConnected();
+    await this.queue.enqueue(() => this.commitMappings(new Map()));
   }
 
-  /**
-   * Get mapping for a key index
-   * @returns The RK firmware code mapped to this key, or undefined if no custom mapping
-   */
   getMapping(keyIndex: number): FirmwareCode | undefined {
     return this.mappings.get(keyIndex);
   }
 
-  /**
-   * Check if a key has a custom mapping
-   */
   hasMapping(keyIndex: number): boolean {
     return this.mappings.has(keyIndex);
   }
 
-  /**
-   * Update lighting settings and sync to hardware
-   */
+  /** Legacy global-only path: exactly one global report, no color packets. */
   async setLighting(settings: StandardLightingSettings): Promise<void> {
-    if (!this.config.lightEnabled) {
-      throw new LightingNotSupportedError(this.config.name);
-    }
-
-    return this.queue.enqueue(async () => {
-      await this.translator.sendStandardLighting(settings);
-      // Update local state after successful hardware write (for persistence)
-      this.lightingSettings = settings;
-      // Save lighting to localStorage (preserves key mappings)
-      saveProfile(this.id, undefined, settings);
-    });
+    this.assertConnected();
+    assertLightingSupported(this.config);
+    const s = validateLightingSettings(this.config, settings);
+    await this.queue.enqueue(() => this.commitLighting(s, undefined));
   }
 
-  /**
-   * Update per-key colors for custom RGB mode
-   */
+  /** Legacy color-only path: the seven color reports, no mode change. */
   async setPerKeyColors(colors: PerKeyColors): Promise<void> {
-    if (!this.config.lightEnabled || !this.config.rgb) {
-      throw new RGBNotSupportedError(this.config.name);
-    }
+    this.assertConnected();
+    const c = validateColorUpdate(this.config, colors);
+    await this.queue.enqueue(() => this.commitLighting(undefined, c));
+  }
 
-    return this.queue.enqueue(async () => {
-      const oldColors = { ...this.perKeyColors };
-      try {
-        this.perKeyColors = colors;
-        await this.translator.sendCustomRGB(colors);
-      } catch (error) {
-        // Rollback on failure
-        this.perKeyColors = oldColors;
-        throw error;
-      }
+  async setKeyColor(bIndex: number, r: number, g: number, b: number): Promise<void> {
+    this.assertConnected();
+    validateColorUpdate(this.config, { [bIndex]: { r, g, b } });
+    await this.queue.enqueue(() =>
+      this.commitLighting(undefined, { ...this.perKeyColors, [bIndex]: { r, g, b } })
+    );
+  }
+
+  async clearKeyColor(bIndex: number): Promise<void> {
+    this.assertConnected();
+    // Off is a valid color for any physical key; this checks support and membership.
+    validateColorUpdate(this.config, { [bIndex]: { r: 0, g: 0, b: 0 } });
+    await this.queue.enqueue(() => {
+      const colors = { ...this.perKeyColors };
+      delete colors[bIndex];
+      return this.commitLighting(undefined, colors);
     });
   }
 
-  /**
-   * Set color for a single key in custom mode
-   */
-  async setKeyColor(bIndex: number, r: number, g: number, b: number): Promise<void> {
-    const newColors = {
-      ...this.perKeyColors,
-      [bIndex]: { r, g, b },
-    };
-    await this.setPerKeyColors(newColors);
+  // ---------------------------------------------------------------------------
+  // Internal commit helpers. These run inside a queued operation and never
+  // enqueue, so they cannot deadlock or interleave with other writes.
+  // ---------------------------------------------------------------------------
+
+  private async commitMappings(candidate: Map<number, FirmwareCode>): Promise<ApplyResult> {
+    await this.transmit('keymap', () => this.translator.sendProfile(candidate));
+    this.mappings = candidate;
+    const persisted = saveProfile(this.id, { mappings: candidate });
+    this.notify?.();
+    return { persisted };
+  }
+
+  private async commitLighting(
+    settings: StandardLightingSettings | undefined,
+    colors: PerKeyColors | undefined
+  ): Promise<ApplyResult> {
+    await this.transmit('lighting', () => this.translator.sendLighting(settings, colors));
+    if (settings) this.lightingSettings = settings;
+    if (colors) this.perKeyColors = colors;
+    const persisted = saveProfile(this.id, { lightingSettings: settings, perKeyColors: colors });
+    this.notify?.();
+    return { persisted };
   }
 
   /**
-   * Clear color for a single key (set to black/off)
+   * Run one area's transfer. On success the area is no longer uncertain. On
+   * failure the applied state is untouched; the area becomes uncertain if any
+   * report was attempted. No retry, replay or rollback is performed.
    */
-  async clearKeyColor(bIndex: number): Promise<void> {
-    const newColors = { ...this.perKeyColors };
-    delete newColors[bIndex];
-    await this.setPerKeyColors(newColors);
+  private async transmit(area: TransferArea, send: () => Promise<void>): Promise<void> {
+    if (!this.connected) {
+      throw new DeviceDisconnectedError(this.config.name);
+    }
+    this.applying = true;
+    this.isMappingLoading = area === 'keymap';
+    this.translator.lastTransfer = null;
+    this.notify?.();
+    try {
+      await send();
+      this.uncertainAreas.delete(area);
+    } catch (error) {
+      // Re-read after the await; TS keeps the pre-await `null` narrowing.
+      const transfer = this.translator.lastTransfer as TransferRecord | null;
+      if (transfer && transfer.attempted > 0) {
+        this.uncertainAreas.add(area);
+      }
+      this.applying = false;
+      this.isMappingLoading = false;
+      this.notify?.();
+      throw error;
+    }
+    // Success: the caller publishes applied state and notifies once.
+    this.applying = false;
+    this.isMappingLoading = false;
+  }
+
+  private assertConnected(): void {
+    if (!this.connected) {
+      throw new DeviceDisconnectedError(this.config.name);
+    }
   }
 }

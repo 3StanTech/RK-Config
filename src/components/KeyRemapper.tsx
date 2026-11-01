@@ -3,14 +3,14 @@ import { useToast } from '../hooks/useToast';
 import { type FirmwareCode } from '../types/keycode';
 import { getLocaleLabel, getLocalizedKeyName } from '../utils/localeLabels';
 import { KeyboardCanvas } from './KeyboardCanvas';
-import { Spinner } from './Spinner';
+import { KeyChordComposer } from './KeyChordComposer';
+import { ApplyErrorAlert } from './PendingChanges';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { KeyboardDevice } from '../models/KeyboardDevice';
 import type { ImageManifest } from '../utils/buildImageManifest';
-import { ERROR_MESSAGES } from '../constants/errorMessages';
+import { decodeChord, firmwareCodeLabel } from '../utils/keyChords';
 import {
   getKeyboardLayout,
   NAVIGATION_CLUSTER,
@@ -29,12 +29,19 @@ import {
   Square,
   SunMedium,
   SunDim,
+  TriangleAlert,
 } from 'lucide-react';
 
 // Helper to get friendly key name (locale-aware)
 function getKeyName(fwCode: FirmwareCode | undefined, locale?: string): string {
   if (fwCode === undefined) return 'Unknown';
+  // Chords with modifiers get their full label; single keys keep locale labels.
+  if (decodeChord(fwCode)?.modifiers) return firmwareCodeLabel(fwCode, 'mac');
   return getLocalizedKeyName(fwCode, locale);
+}
+
+function fwHex(code: FirmwareCode): string {
+  return `0x${code.toString(16).toUpperCase().padStart(4, '0')}`;
 }
 
 // Map of icon names to components
@@ -57,52 +64,45 @@ function renderIcon(iconName: string, className?: string) {
   return <Icon className={className} size={16} />;
 }
 
-export function KeyRemapperActionButton({ device }: { device: KeyboardDevice }) {
+interface KeyRemapperActionButtonProps {
+  /** Number of keys the draft currently overrides. */
+  draftOverrideCount: number;
+  onStageResetAll: () => void;
+  disabled: boolean;
+}
+
+/** Stages the factory layout for every key; nothing is sent until Apply. */
+export function KeyRemapperActionButton({ draftOverrideCount, onStageResetAll, disabled }: KeyRemapperActionButtonProps) {
   const toast = useToast();
-  const isDemo = !!device.isDemo;
-
-  const handleResetAll = async () => {
-    try {
-      await device.clearAll();
-      const message = isDemo ? 'All keys reset to default (Simulated)' : 'All keys reset to default';
-      toast.showSuccess(message);
-    } catch (err) {
-      toast.showError(ERROR_MESSAGES.RESET_ALL_FAILED);
-      console.error(err);
-    }
-  };
-
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const isLoading = device.isMappingLoading;
 
-  const handleResetClick = () => {
-    setShowConfirmDialog(true);
-  };
-
-  const handleConfirmReset = async () => {
+  const handleConfirmReset = () => {
     setShowConfirmDialog(false);
-    await handleResetAll();
+    onStageResetAll();
+    toast.showInfo('Factory layout staged for all keys. Nothing is sent until you press Apply to keyboard.');
   };
 
   return (
     <>
       <Button
-        onClick={handleResetClick}
-        disabled={isLoading}
+        onClick={() => setShowConfirmDialog(true)}
+        disabled={disabled || draftOverrideCount === 0}
         variant="outline"
         size="sm"
+        title="Stages RK's factory key assignments (not the keyboard's own reset); nothing is sent until Apply"
       >
-        {isDemo && <span className="text-primary mr-1">[DEMO]</span>}
         Reset All Keys to Default
       </Button>
 
       {showConfirmDialog && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="reset-all-title">
           <Card className="max-w-md w-full">
             <CardContent className="pt-6">
-              <h3 className="text-lg font-semibold mb-2">Reset All Keys?</h3>
+              <h3 id="reset-all-title" className="text-lg font-semibold mb-2">Stage factory layout for all keys?</h3>
               <p className="text-sm text-muted-foreground mb-6">
-                This will reset all key mappings to their default values. This action cannot be undone.
+                This stages RK&apos;s factory key assignments for all {draftOverrideCount} remapped key{draftOverrideCount === 1 ? '' : 's'}.
+                Nothing is sent until you press Apply to keyboard, and Discard undoes it before then. This is not the
+                keyboard&apos;s own reset.
               </p>
               <div className="flex justify-end gap-3">
                 <Button
@@ -117,7 +117,7 @@ export function KeyRemapperActionButton({ device }: { device: KeyboardDevice }) 
                   variant="destructive"
                   size="sm"
                 >
-                  Reset All Keys
+                  Stage Reset All
                 </Button>
               </div>
             </CardContent>
@@ -131,69 +131,55 @@ export function KeyRemapperActionButton({ device }: { device: KeyboardDevice }) 
 interface KeyRemapperProps {
   device: KeyboardDevice;
   imageManifest?: ImageManifest;
+  /** Draft keymap (bIndex → override); absent keys use factory codes. */
+  draftMappings: Map<number, FirmwareCode>;
+  /** Stage an override, or undefined to stage the factory code. */
+  onStage: (bIndex: number, code: FirmwareCode | undefined) => void;
+  /** Editing is locked (a transfer is running or the keyboard can't be written). */
+  locked: boolean;
+  /** Pane-level apply error, if any. */
+  error: string | null;
+  /** The pane's pending/apply bar. */
+  pendingBar: React.ReactNode;
 }
 
-export function KeyRemapper({ device, imageManifest }: KeyRemapperProps) {
-  const toast = useToast();
+export function KeyRemapper({ device, imageManifest, draftMappings, onStage, locked, error, pendingBar }: KeyRemapperProps) {
   const [selectedKeyIndex, setSelectedKeyIndex] = useState<number | null>(null);
-  const [selectedTargetKey, setSelectedTargetKey] = useState<FirmwareCode | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const isDemo = !!device.isDemo;
-
-  const handleConfirmRemap = async () => {
-    if (selectedKeyIndex === null || selectedTargetKey === null) return;
-
-    setError(null);
-    try {
-      await device.setMapping(selectedKeyIndex, selectedTargetKey);
-      setSelectedTargetKey(null);
-      const message = isDemo ? 'Key mapping updated successfully (Simulated)' : 'Key mapping updated successfully';
-      toast.showSuccess(message);
-    } catch (err) {
-      setError(ERROR_MESSAGES.REMAP_FAILED);
-      toast.showError(ERROR_MESSAGES.REMAP_FAILED);
-      console.error('Remap error:', err);
-    }
-  };
-
-  const handleSetToDefault = async () => {
-    if (selectedKeyIndex === null) return;
-
-    setError(null);
-    try {
-      await device.clearMapping(selectedKeyIndex);
-      setSelectedTargetKey(null);
-      const message = isDemo ? 'Key reset to default (Simulated)' : 'Key reset to default';
-      toast.showSuccess(message);
-    } catch (err) {
-      setError(ERROR_MESSAGES.RESET_KEY_FAILED);
-      toast.showError(ERROR_MESSAGES.RESET_KEY_FAILED);
-      console.error(err);
-    }
-  };
 
   const handleClearSelection = () => {
     setSelectedKeyIndex(null);
-    setSelectedTargetKey(null);
-    setError(null);
   };
 
   const handleKeyClick = (keyIndex: number) => {
     setSelectedKeyIndex(keyIndex);
-    setSelectedTargetKey(null);
-    setError(null);
   };
 
-  const currentMapping = selectedKeyIndex !== null ? device.getMapping(selectedKeyIndex) : undefined;
   const defaultKeyInfo = selectedKeyIndex !== null
     ? device.config.keys.find(k => k.bIndex === selectedKeyIndex)?.keyInfo
     : undefined;
+  const draftOverride = selectedKeyIndex !== null ? draftMappings.get(selectedKeyIndex) : undefined;
+  const appliedOverride = selectedKeyIndex !== null ? device.getMapping(selectedKeyIndex) : undefined;
+  const isPending = selectedKeyIndex !== null && draftOverride !== appliedOverride;
+  /** Effective draft code for the selected key (override, else factory). */
+  const effectiveCode = draftOverride ?? defaultKeyInfo?.fw;
+  // Highlight the matching target in the picker grids.
+  const currentMapping = effectiveCode;
   const locale = device.config.locale;
   const defaultKeyLabel = defaultKeyInfo
     ? (getLocaleLabel(defaultKeyInfo.vk, locale) || defaultKeyInfo.label)
     : undefined;
 
-  const isLoading = device.isMappingLoading;
+  const stageTarget = (fw: FirmwareCode) => {
+    if (selectedKeyIndex === null || locked) return;
+    onStage(selectedKeyIndex, fw);
+  };
+
+  const handleSetToDefault = () => {
+    if (selectedKeyIndex === null) return;
+    onStage(selectedKeyIndex, undefined);
+  };
+
+  const targetsDisabled = selectedKeyIndex === null || locked;
 
   // Render a keyboard row
   const renderKeyboardRow = (row: KeyboardRow, rowIndex: number | string, allowWrap: boolean = false) => {
@@ -213,7 +199,7 @@ export function KeyRemapper({ device, imageManifest }: KeyRemapperProps) {
           if (!item.keyInfo) return null;
 
           const keyInfo = item.keyInfo;
-          const isSelected = selectedTargetKey === keyInfo.fw;
+          const isSelected = draftOverride !== undefined && currentMapping === keyInfo.fw;
           const isCurrent = currentMapping === keyInfo.fw;
           const displayLabel = item.displayLabel || getLocaleLabel(keyInfo.vk, locale) || keyInfo.label;
 
@@ -240,8 +226,9 @@ export function KeyRemapper({ device, imageManifest }: KeyRemapperProps) {
           return (
             <button
               key={keyInfo.vk}
-              onClick={() => setSelectedTargetKey(keyInfo.fw)}
-              disabled={selectedKeyIndex === null}
+              onClick={() => stageTarget(keyInfo.fw)}
+              disabled={targetsDisabled}
+              aria-pressed={isCurrent}
               className={`px-2 py-1 text-xs border rounded transition-colors cursor-pointer flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed shrink-0 whitespace-nowrap ${
                 isSelected
                   ? 'bg-primary text-primary-foreground border-primary'
@@ -322,15 +309,16 @@ export function KeyRemapper({ device, imageManifest }: KeyRemapperProps) {
           if (!item.keyInfo) return null;
 
           const keyInfo = item.keyInfo;
-          const isSelected = selectedTargetKey === keyInfo.fw;
+          const isSelected = draftOverride !== undefined && currentMapping === keyInfo.fw;
           const isCurrent = currentMapping === keyInfo.fw;
           const displayLabel = item.displayLabel || getLocaleLabel(keyInfo.vk, locale) || keyInfo.label;
 
           return (
             <button
               key={keyInfo.vk}
-              onClick={() => setSelectedTargetKey(keyInfo.fw)}
-              disabled={selectedKeyIndex === null}
+              onClick={() => stageTarget(keyInfo.fw)}
+              disabled={targetsDisabled}
+              aria-pressed={isCurrent}
               className={`px-2 py-1 text-xs border rounded transition-colors cursor-pointer flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed ${
                 isSelected
                   ? 'bg-primary text-primary-foreground border-primary'
@@ -355,17 +343,15 @@ export function KeyRemapper({ device, imageManifest }: KeyRemapperProps) {
 
   return (
     <div className="space-y-6">
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+      <ApplyErrorAlert message={error} />
 
       <KeyboardCanvas
         device={device}
         onKeyClick={handleKeyClick}
         selectedKeyIndex={selectedKeyIndex ?? undefined}
         imageManifest={imageManifest}
+        draftMappings={draftMappings}
+        ariaLabel={`${device.config.name} keys — choose a key to remap`}
       />
 
       <Card>
@@ -379,14 +365,11 @@ export function KeyRemapper({ device, imageManifest }: KeyRemapperProps) {
                     <Badge variant="outline" className="font-mono text-base px-3 py-1">
                       {defaultKeyLabel || 'Unknown'}
                     </Badge>
-                    {(currentMapping !== undefined || selectedTargetKey !== null) && (
+                    {draftOverride !== undefined && (
                       <>
                         <span className="text-lg text-muted-foreground">→</span>
-                        <Badge
-                          variant={selectedTargetKey !== null ? "default" : "outline"}
-                          className="font-mono text-base px-3 py-1"
-                        >
-                          {getKeyName(selectedTargetKey !== null ? selectedTargetKey : currentMapping!, locale)}
+                        <Badge className="font-mono text-base px-3 py-1">
+                          {getKeyName(draftOverride, locale)}
                         </Badge>
                       </>
                     )}
@@ -406,46 +389,42 @@ export function KeyRemapper({ device, imageManifest }: KeyRemapperProps) {
                     <span className="flex items-center gap-1.5 shrink-0">
                       {defaultKeyInfo && (
                         <Badge variant="secondary" className="font-mono text-xs shrink-0">
-                          fw=0x{defaultKeyInfo.fw.toString(16).toUpperCase().padStart(4, '0')}
+                          fw={fwHex(defaultKeyInfo.fw)}
                         </Badge>
                       )}
-                      {(currentMapping !== undefined || selectedTargetKey !== null) && (
+                      {draftOverride !== undefined && (
                         <>
                           <span className="text-xs text-muted-foreground">→</span>
                           <Badge variant="secondary" className="font-mono text-xs shrink-0">
-                            fw=0x{(selectedTargetKey ?? currentMapping)!.toString(16).toUpperCase().padStart(4, '0')}
+                            fw={fwHex(draftOverride)}
                           </Badge>
                         </>
                       )}
                     </span>
+                    {isPending ? (
+                      <Badge className="text-xs bg-amber-500 text-white border-transparent">pending · not sent</Badge>
+                    ) : appliedOverride !== undefined ? (
+                      <Badge variant="outline" className="text-xs">last sent</Badge>
+                    ) : null}
                   </>
                 ) : (
-                  <span className="text-xs text-muted-foreground">No key selected</span>
+                  <span className="text-xs text-muted-foreground">No key selected — click or Tab to a key, then press Enter</span>
                 )}
               </div>
             </div>
             <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:justify-end">
               <Button
-                onClick={handleConfirmRemap}
-                disabled={selectedKeyIndex === null || selectedTargetKey === null || isLoading}
-                size="sm"
-              >
-                {isLoading && <Spinner size="sm" className="text-primary-foreground" />}
-                {isDemo && <span className="mr-1">[DEMO]</span>}
-                Apply
-              </Button>
-              <Button
                 onClick={handleSetToDefault}
-                disabled={selectedKeyIndex === null || isLoading}
+                disabled={selectedKeyIndex === null || draftOverride === undefined || locked}
                 variant="secondary"
                 size="sm"
-                title={selectedKeyIndex !== null ? `Reset to default: ${defaultKeyLabel || 'Unknown'}` : 'Select a key first'}
+                title="Stages the factory key; nothing is sent until Apply"
               >
                 Set to Default
               </Button>
               <Button
                 onClick={handleClearSelection}
-                disabled={selectedKeyIndex === null || isLoading}
+                disabled={selectedKeyIndex === null}
                 variant="outline"
                 size="sm"
               >
@@ -454,7 +433,25 @@ export function KeyRemapper({ device, imageManifest }: KeyRemapperProps) {
             </div>
           </div>
 
-          <div className="space-y-4">
+          {selectedKeyIndex !== null && effectiveCode !== undefined && (
+            <div className="border-t border-border pt-4">
+              <KeyChordComposer
+                key={selectedKeyIndex}
+                value={effectiveCode}
+                onChange={stageTarget}
+                disabled={locked}
+              />
+            </div>
+          )}
+
+          <details className="border-t border-border pt-4">
+            <summary className="cursor-pointer text-sm font-medium text-card-foreground">
+              More targets — standard layout, navigation, numpad, media and special keys
+            </summary>
+            <p className="text-xs text-muted-foreground mt-2">
+              Picking a target stages it for the selected key and replaces any chord. Nothing is sent until Apply.
+            </p>
+          <div className="space-y-4 mt-4">
             {/* Main Keyboard Layout - Only this scrolls horizontally */}
             <div>
               <h4 className="text-sm font-semibold mb-3 text-card-foreground">Standard Layout</h4>
@@ -488,9 +485,64 @@ export function KeyRemapper({ device, imageManifest }: KeyRemapperProps) {
                 {ADDITIONAL_KEYS_LAYOUT.map((row, idx) => renderKeyboardRow(row, `special-${idx}`, true))}
               </div>
             </div>
-        </div>
+          </div>
+          </details>
         </CardContent>
       </Card>
+
+      <KeymapWriteWarning device={device} />
+
+      {pendingBar}
+    </div>
+  );
+}
+
+/**
+ * H2 inline warning above the keymap pending bar. Observations are shown only
+ * for the exact model where they were recorded; other boards get the untested variant.
+ */
+function KeymapWriteWarning({ device }: { device: KeyboardDevice }) {
+  const observed = device.config.pid.toLowerCase() === '0055';
+  return (
+    <div
+      className="flex items-start gap-3 rounded-md border border-amber-500/50 bg-amber-50 dark:bg-amber-950/40 px-4 py-3"
+      role="note"
+    >
+      <TriangleAlert className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" aria-hidden="true" />
+      <div className="space-y-1 text-sm text-card-foreground">
+        <p className="font-semibold">
+          {observed
+            ? 'Apply writes the whole keymap — on this RK61 it turns off the keyboard’s own Mac switching'
+            : 'Apply writes the whole keymap'}
+        </p>
+        <p>
+          Every key you haven&apos;t remapped gets the factory code shown in this app (Windows arrangement). On a Mac that
+          means <strong>Win = Command and Alt = Option</strong> unless you remap those keys.
+          {observed
+            ? ''
+            : ' This model hasn’t been tested with this app; a whole-keymap write may change how its own Mac/Windows switch behaves.'}
+        </p>
+        {observed && (
+          <details>
+            <summary className="cursor-pointer text-sm font-medium">What was observed on this model</summary>
+            <ul className="mt-1 list-disc pl-5 space-y-1">
+              <li>
+                RK61 (0055), 1 Nov 2026: after one keymap Apply, the keyboard&apos;s own Fn+S Mac switch stopped working.
+                Unplugging, power cycling and sending the factory layout from this app didn&apos;t bring it back.
+              </li>
+              <li>Native Mac behavior came back only after the keyboard&apos;s own reset (hold Fn+Space 3–5 s, then Fn+S).</li>
+              <li>
+                RK&apos;s guide says that reset may clear the keyboard&apos;s onboard remaps, lighting and pairings. Don&apos;t
+                rely on it to keep your remaps. Lighting can be re-sent from this app afterwards.
+              </li>
+              <li>
+                The firmware&apos;s internal behavior isn&apos;t known; this app can&apos;t read the keyboard and uses no
+                hidden commands. Other RK models may behave differently.
+              </li>
+            </ul>
+          </details>
+        )}
+      </div>
     </div>
   );
 }

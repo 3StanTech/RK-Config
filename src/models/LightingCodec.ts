@@ -66,7 +66,15 @@ export class LightingCodec {
   }
 
   /**
-   * Encode custom per-key RGB colors into 7 HID buffers
+   * Encode custom per-key colors into 7 HID buffers.
+   *
+   * Callers pass logical RGB; each key is written on the wire as G, R, B.
+   * Evidence (258A:0055 RK61, owner observation 2026-11-01): logical red on all
+   * 61 keys displayed green, logical green displayed red and blue stayed blue,
+   * so the firmware reads the first two bytes swapped relative to R, G. Per-key
+   * color is only enabled for 0055 (see deviceCapabilities.ts); extend another
+   * variant only with its own physical evidence. The global lighting color in
+   * encodeStandardLighting is unchanged (no evidence of a swap there).
    */
   static encodeCustomRGB(keyColors: PerKeyColors): Uint8Array[] {
     const NUM_BUFFERS = 7;
@@ -76,14 +84,14 @@ export class LightingCodec {
     // Each key gets 3 bytes at position (bIndex * 3)
     const fullBuffer = new Uint8Array(NUM_BUFFERS * this.BUFFER_SIZE);
 
-    // Fill with key colors
+    // Fill with key colors in wire order G, R, B
     for (const [bIndexStr, color] of Object.entries(keyColors)) {
       const bIndex = parseInt(bIndexStr);
       const offset = bIndex * 3;
 
       if (offset + 2 < fullBuffer.length) {
-        fullBuffer[offset] = color.r;
-        fullBuffer[offset + 1] = color.g;
+        fullBuffer[offset] = color.g;
+        fullBuffer[offset + 1] = color.r;
         fullBuffer[offset + 2] = color.b;
       }
     }

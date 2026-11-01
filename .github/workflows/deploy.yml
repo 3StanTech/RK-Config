@@ -1,8 +1,7 @@
-name: Deploy to GitHub Pages
+name: Deploy to GitHub Pages (manual)
 
+# Manual dispatch only: pushes never publish. Pull-request checks live in pr-check.yml.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -29,6 +28,9 @@ jobs:
 
       - name: Validate (lint + typecheck + test + build)
         run: bun run validate
+        env:
+          # Optional repository variable for an owned site URL; empty means no canonical metadata.
+          SITE_URL: ${{ vars.SITE_URL }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

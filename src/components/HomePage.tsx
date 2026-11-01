@@ -11,6 +11,40 @@ import { Search, Rocket } from 'lucide-react';
 import type { ImageManifest } from '../utils/buildImageManifest';
 import { useDevices } from '../hooks/useDevices';
 import { isRKWebSoftwareSupported, RK_WEB_SOFTWARE_URL } from '../constants/rkWebSoftware';
+import { EVIDENCE_RECORDS } from '../constants/deviceEvidence';
+import type { DeviceFeature } from '../constants/deviceCapabilities';
+
+const FEATURE_NAMES: Record<DeviceFeature, string> = {
+  keymap: 'key remapping',
+  globalLighting: 'lighting',
+  perKeyColor: 'per-key RGB',
+};
+
+/** Catalog evidence label for one model; only recorded evidence raises it above "config file only". */
+function catalogEvidence(pid: string): { label: string; title: string; className: string } {
+  const records = EVIDENCE_RECORDS.filter(r => r.pid === pid.toLowerCase());
+  const verified = records.filter(r => r.level === 'verified-fork');
+  if (verified.length > 0) {
+    const names = [...new Set(verified.map(r => FEATURE_NAMES[r.feature]))].join(', ');
+    return {
+      label: `Verified: ${names}`,
+      title: `Physically verified with this app (${verified.map(r => `${FEATURE_NAMES[r.feature]} ${r.transport.toUpperCase()} ${r.recordedOn}`).join('; ')}). Other features remain experimental.`,
+      className: 'border-green-500/50 bg-green-50 text-green-800 dark:bg-green-950/40 dark:text-green-300',
+    };
+  }
+  if (records.length > 0) {
+    return {
+      label: 'Experimental · source-checked',
+      title: `Configuration and protocol checked from source for ${[...new Set(records.map(r => FEATURE_NAMES[r.feature]))].join(', ')}; not yet confirmed on hardware with this app.`,
+      className: 'border-amber-500/50 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200',
+    };
+  }
+  return {
+    label: 'Config file only',
+    title: 'Listed in the official RK configuration files; untested with this app.',
+    className: 'border-border text-muted-foreground',
+  };
+}
 
 interface KeyboardListItemProps {
   pid: string;
@@ -97,6 +131,7 @@ const KeyboardListItem = memo(function KeyboardListItem({ pid, name, isExpanded,
     };
 
     const expandedPanelId = `kb-${pidUpper}-panel`;
+    const evidence = catalogEvidence(pid);
 
     // Get dimensions from manifest (pre-computed at build time)
     const standardDims = imageInfo?.keyimgDimensions;
@@ -114,8 +149,14 @@ const KeyboardListItem = memo(function KeyboardListItem({ pid, name, isExpanded,
         aria-expanded={isExpanded}
         aria-controls={expandedPanelId}
       >
-        <span className="text-sm flex items-center gap-2">
+        <span className="text-sm flex flex-wrap items-center gap-2">
           <span><span className="font-mono text-muted-foreground">{pid.toUpperCase()}</span> - {name}</span>
+          <span
+            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium shrink-0 ${evidence.className}`}
+            title={evidence.title}
+          >
+            {evidence.label}
+          </span>
           {isRKWebSoftwareSupported(pid) && (
             <a
               href={RK_WEB_SOFTWARE_URL}
@@ -357,11 +398,12 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
           Open source Royal Kludge software<br />for Mac, Linux, and Windows
         </h1>
         <p className="text-xl text-muted-foreground">
-          Remap keys and configure lighting in your browser — no installation required
+          Remap keys, compose modifier chords and paint per-key colors in your browser — then Apply when you&apos;re ready
         </p>
         <p className="text-sm text-muted-foreground mt-2 mb-4">
-          Unofficial software, not affiliated with Royal Kludge.<br />
-          Built through reverse engineering and referencing other works like <a href="https://rnayabed.github.io/rangoli_website/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Rangoli</a>.
+          RK Configurator is unofficial software, not affiliated with Royal Kludge.<br />
+          A modified version of <a href="https://github.com/vinc3m1/kludgeknight" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">KludgeKnight</a> by Vince Mi,
+          built through reverse engineering and referencing other works like <a href="https://rnayabed.github.io/rangoli_website/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Rangoli</a>.
         </p>
 
         {/* GitHub Link */}
@@ -374,7 +416,7 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
           <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
             <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd" />
           </svg>
-          View Source on GitHub
+          View upstream KludgeKnight source on GitHub
         </a>
 
         {/* CTA - Connect Keyboard & Demo Mode */}
@@ -406,7 +448,7 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
               <CardContent>
                 <Alert className="mb-4">
                   <AlertDescription>
-                    Demo mode lets you explore the interface without connecting a physical keyboard. All features work normally, but nothing is written to hardware.
+                    Demo mode lets you explore the interface without connecting a physical keyboard. You can stage edits and press Apply, but Apply is only simulated: nothing is written to hardware or saved in this browser, and a demo apply is never evidence that a model works.
                   </AlertDescription>
                 </Alert>
 
@@ -435,8 +477,8 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
               </svg>
             </div>
             <div>
-              <h3 className="font-semibold text-foreground">Remap Any Key</h3>
-              <p className="text-sm text-muted-foreground">Map any key to any other key or modifier. Changes are written directly to keyboard firmware.</p>
+              <h3 className="font-semibold text-foreground">Remap Keys and Chords</h3>
+              <p className="text-sm text-muted-foreground">Map a key to another key, or compose a chord from left/right modifiers plus a base key (for example ⌘ Command + C). Edits stay pending until you press Apply, which sends the whole keymap at once.</p>
             </div>
           </div>
 
@@ -447,8 +489,8 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
               </svg>
             </div>
             <div>
-              <h3 className="font-semibold text-foreground">Control Lighting</h3>
-              <p className="text-sm text-muted-foreground">Set backlight brightness, speed, and effects. Works with both standard and RGB models.</p>
+              <h3 className="font-semibold text-foreground">Lighting and Per-Key Colors</h3>
+              <p className="text-sm text-muted-foreground">Set mode, brightness, speed and sleep. On models with an established custom mode (currently the RK61, 0055), paint individual keys or start from a built-in palette. Lighting has its own Apply, separate from the keymap.</p>
             </div>
           </div>
 
@@ -472,7 +514,7 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
             </div>
             <div>
               <h3 className="font-semibold text-foreground">Cross-Platform</h3>
-              <p className="text-sm text-muted-foreground">Works across Windows, Mac, and Linux. Settings saved in browser storage.</p>
+              <p className="text-sm text-muted-foreground">Works across Windows, Mac, and Linux. The last successfully applied settings and per-key colors are remembered in this browser only.</p>
             </div>
           </div>
           </div>
@@ -495,7 +537,7 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
           </div>
           <div className="flex-1">
             <p className="text-card-foreground">
-              Hosted as a static site on GitHub Pages with no backend. All configuration happens directly between browser and keyboard via WebHID. Settings stored in browser localStorage only.
+              A static site with no backend. All configuration happens directly between browser and keyboard via WebHID, and only when you press Apply. Settings are stored in browser localStorage only — no accounts, profiles or uploads.
             </p>
           </div>
         </div>
@@ -521,7 +563,16 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
             <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-primary text-primary-foreground rounded-full text-sm font-bold mr-3">3</span>
             <span>Select keyboard from browser dialog and click Connect</span>
           </li>
+          <li className="flex items-start">
+            <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-primary text-primary-foreground rounded-full text-sm font-bold mr-3">4</span>
+            <span>Stage changes on the Key Mapping or Lighting tab, check the pending bar, then press Apply to keyboard. Each tab applies separately; Discard drops pending edits without sending anything.</span>
+          </li>
         </ol>
+        <Alert className="mt-4">
+          <AlertDescription>
+            The keyboard can&apos;t be read back. The editor starts from what this browser last sent successfully, or from app defaults if it has never sent anything — neither is a reading of the keyboard&apos;s current state. Connecting or opening the page sends nothing.
+          </AlertDescription>
+        </Alert>
         <Alert className="mt-4">
           <AlertDescription>
             Chrome, Edge, or Opera required (desktop only). WebHID not supported in Firefox/Safari or mobile browsers.
@@ -533,35 +584,38 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
       {/* Feature Stability */}
       <Card>
         <CardHeader>
-          <CardTitle>Feature Stability</CardTitle>
+          <CardTitle>Feature Evidence</CardTitle>
         </CardHeader>
         <CardContent>
+        <p className="text-sm text-muted-foreground mb-4">
+          Each model in the list below shows how well its features are backed: <strong>Config file only</strong> (listed in RK&apos;s files, untested with this app), <strong>Experimental · source-checked</strong> (configuration and protocol checked from source, not yet confirmed on hardware), or <strong>Verified</strong> (physically confirmed with this app, per feature and connection). Nothing is marked verified without a recorded hardware run.
+        </p>
         <div className="space-y-3">
           <div className="flex items-start">
-            <div className="flex-shrink-0 w-20 mr-4">
-              <Badge className="bg-accent/20 text-accent-foreground border-accent/30">STABLE</Badge>
+            <div className="flex-shrink-0 w-28 mr-4">
+              <Badge variant="outline">REPORTED UPSTREAM</Badge>
             </div>
             <div>
-              <p className="font-semibold text-card-foreground">Key Mapping</p>
-              <p className="text-sm text-muted-foreground">Tested on RK F68 and S70 Split. Stable for keyboards up to 70 keys with 2 spacebars. Keyboards with other unique modifier keys may be untested.</p>
+              <p className="font-semibold text-card-foreground">Key Mapping and Global Lighting</p>
+              <p className="text-sm text-muted-foreground">The upstream KludgeKnight project reports testing on RK F68 and S70 Split. This modified version has not re-tested those models.</p>
             </div>
           </div>
           <div className="flex items-start">
-            <div className="flex-shrink-0 w-20 mr-4">
-              <Badge className="bg-accent/20 text-accent-foreground border-accent/30">STABLE</Badge>
+            <div className="flex-shrink-0 w-28 mr-4">
+              <Badge className="bg-amber-50 text-amber-900 border-amber-500/50 dark:bg-amber-950/40 dark:text-amber-200">EXPERIMENTAL</Badge>
             </div>
             <div>
-              <p className="font-semibold text-card-foreground">Lighting & RGB Controls</p>
-              <p className="text-sm text-muted-foreground">Keyboard-wide lighting and RGB controls tested on RK F68 and S70 Split with extensive RGB functionality. Should work on most devices.</p>
+              <p className="font-semibold text-card-foreground">Modifier Chords</p>
+              <p className="text-sm text-muted-foreground">Left and right Control, Shift, Option/Alt and Command/Win bits are sent exactly as chosen, with no automatic Mac/Windows swap. How the OS treats them still needs testing on the keyboard.</p>
             </div>
           </div>
           <div className="flex items-start">
-            <div className="flex-shrink-0 w-20 mr-4">
-              <Badge className="bg-muted text-muted-foreground border-transparent">FUTURE</Badge>
+            <div className="flex-shrink-0 w-28 mr-4">
+              <Badge className="bg-amber-50 text-amber-900 border-amber-500/50 dark:bg-amber-950/40 dark:text-amber-200">EXPERIMENTAL</Badge>
             </div>
             <div>
-              <p className="font-semibold text-card-foreground">Per-Key RGB</p>
-              <p className="text-sm text-muted-foreground">Individual key RGB customization is not yet implemented. Pull requests welcome!</p>
+              <p className="font-semibold text-card-foreground">Per-Key RGB and Palettes</p>
+              <p className="text-sm text-muted-foreground">Available only where a custom per-key mode is established for the exact model — currently the RK61 (0055, Customize mode 14), from its configuration files. Other RGB models get global lighting only.</p>
             </div>
           </div>
         </div>
@@ -581,7 +635,7 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
             </svg>
             <div>
               <p className="font-semibold text-card-foreground">Can&apos;t read existing mappings from keyboard</p>
-              <p className="text-sm text-muted-foreground">RK firmware only accepts writes. KludgeKnight starts with default layout and can only save mappings to browser localStorage.</p>
+              <p className="text-sm text-muted-foreground">RK firmware only accepts writes. The app starts from the last state this browser sent successfully (or defaults) and can&apos;t confirm what the keyboard holds. If a transfer fails part-way, the keyboard may be partly updated; there is no rollback, so apply again.</p>
             </div>
           </li>
           <li className="flex items-start">
@@ -590,24 +644,33 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
             </svg>
             <div>
               <p className="font-semibold text-card-foreground">Settings only saved in browser localStorage</p>
-              <p className="text-sm text-muted-foreground">Since keyboard firmware can&apos;t be read, settings are saved to browser localStorage as a fallback. No backend means these stay local to one browser. Clearing browser data or switching browsers resets to defaults.</p>
+              <p className="text-sm text-muted-foreground">One record per keyboard holds the last applied keymap, lighting and per-key colors — no named profiles or import/export. It stays local to one browser and one site address; clearing browser data, switching browsers or opening the app from another address starts from defaults. If storage is full, an Apply still reaches the keyboard but isn&apos;t remembered, and the app says so.</p>
+            </div>
+          </li>
+          <li className="flex items-start">
+            <svg className="flex-shrink-0 w-5 h-5 text-accent mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            <div>
+              <p className="font-semibold text-card-foreground">Classic RK protocol only, by USB</p>
+              <p className="text-sm text-muted-foreground">The app writes only to keyboards whose configuration interface matches the classic RK format (feature report 0x0A, 64 bytes) and whose exact model has a shipped configuration. Other or newer RK protocols are refused before anything is sent; use RK&apos;s own software for those. Bluetooth and 2.4 GHz are not supported.</p>
             </div>
           </li>
         </ul>
         </CardContent>
       </Card>
 
-      {/* Supported Keyboards */}
+      {/* Model catalog */}
       <Card>
         <CardHeader>
-          <CardTitle>Supported Models</CardTitle>
+          <CardTitle>Model Catalog</CardTitle>
         </CardHeader>
         <CardContent>
         <p className="text-muted-foreground mb-2">
-          {keyboards.length} RK keyboard models supported.
+          {keyboards.length} RK keyboard models listed.
         </p>
         <p className="text-xs text-muted-foreground mb-4">
-          Configurations from official RK Windows software (Oct 2025).
+          Configurations from official RK Windows software (Oct 2025). A listed model is browsable in demo mode; it is not proof the model works with this app — see each model&apos;s evidence label.
         </p>
         {keyboards.length > 0 ? (
           <>
@@ -702,6 +765,7 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
         <div className="text-sm text-card-foreground space-y-2 font-mono bg-muted p-4 rounded border border-border">
           <p>Kludge Knight - Browser-based Software for Royal Kludge Keyboards</p>
           <p>Copyright (C) 2025 Vince Mi (vinc3m1)</p>
+          <p>RK Configurator is a modified version of Kludge Knight (2026), distributed under the same license.</p>
           <p className="pt-2">
             This program is free software: you can redistribute it and/or modify
             it under the terms of the GNU General Public License as published by

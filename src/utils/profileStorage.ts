@@ -1,132 +1,190 @@
 import { z } from 'zod';
 import type { FirmwareCode } from '../types/keycode';
-import type { StandardLightingSettings } from '../models/LightingCodec';
+import type { KeyboardConfig } from '../types/keyboard';
+import type { StandardLightingSettings, PerKeyColors } from '../models/LightingCodec';
 
+/**
+ * Last-applied browser state per device, stored under `kludgeknight_profile_{deviceId}`.
+ *
+ * Formats read:
+ * - legacy: bare array of [bIndex, firmwareCode]
+ * - version 2 (or unversioned object): { mappings?, lightingSettings? }
+ * - version 3: version 2 plus perKeyColors as [bIndex, r, g, b] tuples
+ * Writes always produce version 3. Drafts are never stored here.
+ */
 const STORAGE_PREFIX = 'kludgeknight_profile_';
+const CURRENT_VERSION = 3;
 
-// Zod schemas for validation
+const Channel = z.number().int().min(0).max(255);
+
 const MappingTupleSchema = z.tuple([
-  z.number(), // keyIndex
-  z.number(), // FirmwareCode
+  z.number().int().min(0), // keyIndex (bIndex)
+  z.number().int().min(0).max(0xffffffff), // FirmwareCode
 ]);
 
 const LightingSettingsSchema = z.object({
-  modeIndex: z.number(),
-  speed: z.number(),
-  brightness: z.number(),
+  modeIndex: z.number().int().min(1),
+  speed: z.number().int().min(1).max(5),
+  brightness: z.number().int().min(0).max(5),
   randomColor: z.boolean(),
-  sleep: z.number(),
-  color: z.object({
-    r: z.number(),
-    g: z.number(),
-    b: z.number(),
-  }),
+  sleep: z.number().int().min(1).max(5),
+  color: z.object({ r: Channel, g: Channel, b: Channel }),
 });
+
+const ColorTupleSchema = z.tuple([z.number().int().min(0), Channel, Channel, Channel]);
 
 const DeviceProfileSchema = z.object({
   mappings: z.array(MappingTupleSchema).optional(),
   lightingSettings: LightingSettingsSchema.optional(),
-  version: z.number().optional(),
+  perKeyColors: z.array(ColorTupleSchema).optional(),
+  version: z.number().int().min(1).max(CURRENT_VERSION).optional(),
 });
 
 // Legacy format support - just an array of mappings
 const LegacyProfileSchema = z.array(MappingTupleSchema);
 
-// Type inference from schemas
 export type DeviceProfile = z.infer<typeof DeviceProfileSchema>;
 
+export interface StoredProfile {
+  mappings: Map<number, FirmwareCode> | null;
+  lightingSettings: StandardLightingSettings | null;
+  perKeyColors: PerKeyColors | null;
+}
+
+/** Areas to replace; an omitted field keeps the currently saved value. */
+export interface ProfileUpdate {
+  mappings?: Map<number, FirmwareCode>;
+  lightingSettings?: StandardLightingSettings;
+  perKeyColors?: PerKeyColors;
+}
+
+const EMPTY: StoredProfile = { mappings: null, lightingSettings: null, perKeyColors: null };
+
+function emptyProfile(): StoredProfile {
+  return { ...EMPTY };
+}
+
 /**
- * Save device profile (key mappings and lighting) to localStorage
+ * Parse stored JSON without filtering. Returns null for missing, corrupt or
+ * unsupported data.
  */
-export function saveProfile(
-  deviceId: string,
-  mappings?: Map<number, FirmwareCode>,
-  lightingSettings?: StandardLightingSettings
-): void {
+function readStored(deviceId: string): StoredProfile | null {
+  const json = localStorage.getItem(STORAGE_PREFIX + deviceId);
+  if (!json) return null;
+
+  let data: unknown;
   try {
-    const key = STORAGE_PREFIX + deviceId;
+    data = JSON.parse(json);
+  } catch {
+    console.warn('Ignoring unreadable saved profile');
+    return null;
+  }
 
-    // Load existing profile to preserve other settings
-    const existing = loadFullProfile(deviceId);
+  if (Array.isArray(data)) {
+    const legacy = LegacyProfileSchema.safeParse(data);
+    if (!legacy.success) {
+      console.warn('Invalid legacy profile format:', z.prettifyError(legacy.error));
+      return null;
+    }
+    return { mappings: new Map(legacy.data), lightingSettings: null, perKeyColors: null };
+  }
 
-    const profile: DeviceProfile = {
-      version: 2,  // Version 2 includes lighting
-    };
+  const result = DeviceProfileSchema.safeParse(data);
+  if (!result.success) {
+    console.warn('Invalid profile format:', z.prettifyError(result.error));
+    return null;
+  }
 
-    // Only include mappings if we have actual data
-    if (mappings) {
-      profile.mappings = Array.from(mappings.entries());
-    } else if (existing.mappings) {
-      profile.mappings = Array.from(existing.mappings.entries());
+  const { mappings, lightingSettings, perKeyColors } = result.data;
+  let colors: PerKeyColors | null = null;
+  if (perKeyColors) {
+    colors = {};
+    for (const [bIndex, r, g, b] of perKeyColors) colors[bIndex] = { r, g, b };
+  }
+  return {
+    mappings: mappings ? new Map(mappings) : null,
+    lightingSettings: lightingSettings ?? null,
+    perKeyColors: colors,
+  };
+}
+
+/** Drop entries that do not belong to the connected configuration. */
+function filterForConfig(profile: StoredProfile, config: KeyboardConfig): StoredProfile {
+  const validIndexes = new Set(config.keys.map(k => k.bIndex));
+
+  let mappings: Map<number, FirmwareCode> | null = null;
+  if (profile.mappings) {
+    mappings = new Map([...profile.mappings].filter(([bIndex]) => validIndexes.has(bIndex)));
+  }
+
+  const lightingSettings =
+    profile.lightingSettings &&
+    config.lightEnabled &&
+    config.lightingModes.some(m => m.index === profile.lightingSettings!.modeIndex)
+      ? profile.lightingSettings
+      : null;
+
+  let perKeyColors: PerKeyColors | null = null;
+  if (profile.perKeyColors && config.lightEnabled && config.rgb) {
+    perKeyColors = {};
+    for (const [key, color] of Object.entries(profile.perKeyColors)) {
+      const bIndex = Number(key);
+      if (validIndexes.has(bIndex)) perKeyColors[bIndex] = color;
+    }
+  }
+
+  return { mappings, lightingSettings, perKeyColors };
+}
+
+/**
+ * Save applied state for a device, replacing only the given areas and keeping
+ * other saved areas. Corrupt or unsupported existing data is replaced.
+ * @returns true when the write succeeded; false on any storage failure (e.g. quota).
+ */
+export function saveProfile(deviceId: string, update: ProfileUpdate): boolean {
+  try {
+    const existing = readStored(deviceId) ?? emptyProfile();
+    const mappings = update.mappings ?? existing.mappings;
+    const lightingSettings = update.lightingSettings ?? existing.lightingSettings;
+    const perKeyColors = update.perKeyColors ?? existing.perKeyColors;
+
+    const profile: DeviceProfile = { version: CURRENT_VERSION };
+    if (mappings) profile.mappings = Array.from(mappings.entries());
+    if (lightingSettings) profile.lightingSettings = lightingSettings;
+    if (perKeyColors) {
+      profile.perKeyColors = Object.entries(perKeyColors).map(
+        ([bIndex, c]) => [Number(bIndex), c.r, c.g, c.b] as [number, number, number, number]
+      );
     }
 
-    // Only include lighting settings if we have actual data
-    if (lightingSettings !== undefined) {
-      profile.lightingSettings = lightingSettings;
-    } else if (existing.lightingSettings) {
-      profile.lightingSettings = existing.lightingSettings;
-    }
-
-    localStorage.setItem(key, JSON.stringify(profile));
+    localStorage.setItem(STORAGE_PREFIX + deviceId, JSON.stringify(profile));
+    return true;
   } catch (error) {
     console.error('Failed to save profile to localStorage:', error);
+    return false;
   }
 }
 
 /**
  * Load key mappings from localStorage for a device (backward compatible)
  */
-export function loadProfile(deviceId: string): Map<number, FirmwareCode> | null {
-  const { mappings } = loadFullProfile(deviceId);
-  return mappings;
+export function loadProfile(deviceId: string, config?: KeyboardConfig): Map<number, FirmwareCode> | null {
+  return loadFullProfile(deviceId, config).mappings;
 }
 
 /**
- * Load complete device profile including lighting settings
+ * Load the saved applied state. With a config, entries outside the connected
+ * keyboard's keys/modes are dropped. Corrupt, unsupported or unreadable data
+ * yields empty values; loading never writes to storage.
  */
-export function loadFullProfile(deviceId: string): {
-  mappings: Map<number, FirmwareCode> | null;
-  lightingSettings: StandardLightingSettings | null;
-} {
+export function loadFullProfile(deviceId: string, config?: KeyboardConfig): StoredProfile {
   try {
-    const key = STORAGE_PREFIX + deviceId;
-    const json = localStorage.getItem(key);
-    if (!json) {
-      return { mappings: null, lightingSettings: null };
-    }
-
-    const data = JSON.parse(json);
-
-    // Try legacy format first (just array of mappings)
-    if (Array.isArray(data)) {
-      const legacyResult = LegacyProfileSchema.safeParse(data);
-      if (legacyResult.success) {
-        return {
-          mappings: new Map(legacyResult.data as Array<[number, FirmwareCode]>),
-          lightingSettings: null,
-        };
-      } else {
-        console.warn('Invalid legacy profile format:', z.prettifyError(legacyResult.error));
-        return { mappings: null, lightingSettings: null };
-      }
-    }
-
-    // Try new format with version
-    const result = DeviceProfileSchema.safeParse(data);
-    if (result.success) {
-      return {
-        mappings: result.data.mappings
-          ? new Map(result.data.mappings as Array<[number, FirmwareCode]>)
-          : null,
-        lightingSettings: result.data.lightingSettings as StandardLightingSettings | undefined || null,
-      };
-    } else {
-      console.warn('Invalid profile format:', z.prettifyError(result.error));
-      return { mappings: null, lightingSettings: null };
-    }
+    const stored = readStored(deviceId);
+    if (!stored) return emptyProfile();
+    return config ? filterForConfig(stored, config) : stored;
   } catch (error) {
     console.error('Failed to load profile from localStorage:', error);
-    return { mappings: null, lightingSettings: null };
+    return emptyProfile();
   }
 }
 
@@ -135,8 +193,7 @@ export function loadFullProfile(deviceId: string): {
  */
 export function clearProfile(deviceId: string): void {
   try {
-    const key = STORAGE_PREFIX + deviceId;
-    localStorage.removeItem(key);
+    localStorage.removeItem(STORAGE_PREFIX + deviceId);
   } catch (error) {
     console.error('Failed to clear profile from localStorage:', error);
   }

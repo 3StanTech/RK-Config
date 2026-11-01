@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useReducer, useState } from 'react';
-import { HIDDeviceManager } from '../models/HIDDeviceManager';
+import { HIDDeviceManager, IncompatibleDeviceError } from '../models/HIDDeviceManager';
 import { HIDKeyboardDevice } from '../models/HIDKeyboardDevice';
 import { DemoKeyboardDevice } from '../models/DemoKeyboardDevice';
 import type { KeyboardDevice } from '../models/KeyboardDevice';
@@ -137,6 +137,9 @@ export function DeviceProvider({ children, ledManifest }: { children: ReactNode;
 
       if (error instanceof WebHIDNotAvailableError) {
         errorMessage = ERROR_MESSAGES.WEBHID_NOT_AVAILABLE;
+      } else if (error instanceof IncompatibleDeviceError) {
+        // Curated guidance for the specific rejection; technical detail stays in the console.
+        errorMessage = error.guidance;
       } else if (error instanceof UnsupportedKeyboardError) {
         errorMessage = ERROR_MESSAGES.UNSUPPORTED_KEYBOARD;
       } else if (error instanceof DeviceOpenError) {
