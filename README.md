@@ -4,11 +4,13 @@
 
 RK Configurator is a modified version of [KludgeKnight](https://github.com/vinc3m1/kludgeknight) by Vince Mi (upstream project). It runs in your browser and talks to the keyboard over WebHID, and nothing is sent to a keyboard until you press **Apply**.
 
+**Live site: [rk-config.tristandolfo.workers.dev](https://rk-config.tristandolfo.workers.dev)**
+
 Source for this modified version: [github.com/3StanTech/RK-Config](https://github.com/3StanTech/RK-Config).
 
 > ⚠️ **Disclaimer**: This is unofficial software and is not affiliated with, endorsed by, or connected to Royal Kludge in any way. Use at your own risk.
 
-> **Status**: First-release candidate. Key mapping, global lighting and per-key colors are verified on one RK61 (`258A:0055`) over USB only; no other model or connection is verified (see [Feature evidence](#feature-evidence)). Its source is public at [3StanTech/RK-Config](https://github.com/3StanTech/RK-Config); no hosted site has been chosen yet.
+> **Status**: First-release candidate. Key mapping, global lighting and per-key colors are verified on one RK61 (`258A:0055`) over USB only; no other model or connection is verified (see [Feature evidence](#feature-evidence)). It is hosted at [rk-config.tristandolfo.workers.dev](https://rk-config.tristandolfo.workers.dev), and its source is public at [3StanTech/RK-Config](https://github.com/3StanTech/RK-Config).
 
 ## ✨ What this version adds
 
@@ -33,7 +35,7 @@ Kept from upstream: visual keyboard layout, global lighting (mode, brightness, s
 
 ### Steps
 
-1. Open the app (for now, run it locally; see [For developers](#-for-developers)).
+1. Open the app at [rk-config.tristandolfo.workers.dev](https://rk-config.tristandolfo.workers.dev), or run it locally (see [For developers](#-for-developers)).
 2. Click **Connect Keyboard** and pick the keyboard in the browser dialog. Connecting sends nothing.
 3. Stage edits on the **Key Mapping** or **Lighting** tab. The pending bar shows how many changes are waiting.
 4. Press **Apply to keyboard** on that tab, or **Discard** to drop its pending edits without sending anything. Key Mapping then asks you to confirm: **Cancel** (focused first, also Escape) sends nothing and keeps your edits pending; **Send keymap (9 reports)** sends the whole map.
@@ -135,7 +137,19 @@ bun run validate
 bun run build
 ```
 
-No public site address is configured. Canonical and structured-data URLs are added only when `SITE_URL` is set at build time to a site you own. The GitHub Pages workflow (`.github/workflows/deploy.yml`) runs only on manual dispatch and validates before deploying. Pull requests are checked by `pr-check.yml`.
+Local builds emit no canonical or structured-data URLs; those are added only when `SITE_URL` is set at build time to a site you own.
+
+### Hosting
+
+The public site is the static build uploaded directly to Cloudflare Workers Static Assets (service `rk-config`) through the Cloudflare dashboard. It is not connected to Git, so pushing to GitHub does not deploy anything. To publish an update:
+
+```bash
+SITE_URL=https://rk-config.tristandolfo.workers.dev bun run build
+```
+
+Then upload the contents of `dist/` to the existing `rk-config` service in the dashboard. No server-side rendering, database or other backend is involved.
+
+The GitHub Pages workflow (`.github/workflows/deploy.yml`) is an unused alternative, not the current host; it runs only on manual dispatch and validates before deploying. Pull requests are checked by `pr-check.yml`.
 
 ## 📄 License
 

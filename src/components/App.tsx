@@ -59,6 +59,15 @@ function AppContent({ initialKeyboards, imageManifest }: AppProps = {}) {
           </p>
           <p className="text-center text-xs text-muted-foreground mt-2">
             <a
+              href="https://github.com/3StanTech/RK-Config"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-foreground transition-colors"
+            >
+              View this version&apos;s source
+            </a>
+            {' · '}
+            <a
               href="https://github.com/vinc3m1/kludgeknight"
               target="_blank"
               rel="noopener noreferrer"

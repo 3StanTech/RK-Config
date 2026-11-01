@@ -403,7 +403,8 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
         <p className="text-sm text-muted-foreground mt-2 mb-4">
           RK Configurator is unofficial software, not affiliated with Royal Kludge.<br />
           A modified version of <a href="https://github.com/vinc3m1/kludgeknight" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">KludgeKnight</a> by Vince Mi,
-          built through reverse engineering and referencing other works like <a href="https://rnayabed.github.io/rangoli_website/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Rangoli</a>.
+          built through reverse engineering and referencing other works like <a href="https://rnayabed.github.io/rangoli_website/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Rangoli</a>.<br />
+          Source for this version: <a href="https://github.com/3StanTech/RK-Config" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">3StanTech/RK-Config</a>.
         </p>
 
         {/* GitHub Link */}
@@ -570,7 +571,7 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
         </ol>
         <Alert className="mt-4">
           <AlertDescription>
-            The keyboard can&apos;t be read back. The editor starts from what this browser last sent successfully, or from app defaults if it has never sent anything — neither is a reading of the keyboard&apos;s current state. Connecting or opening the page sends nothing.
+            This app cannot read the keyboard&apos;s configuration back. The editor starts from what this browser last sent successfully, or from app defaults if it has never sent anything — neither is a reading of the keyboard&apos;s current state. Connecting or opening the page sends nothing.
           </AlertDescription>
         </Alert>
         <Alert className="mt-4">
@@ -606,7 +607,7 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
             </div>
             <div>
               <p className="font-semibold text-card-foreground">Modifier Chords</p>
-              <p className="text-sm text-muted-foreground">Left and right Control, Shift, Option/Alt and Command/Win bits are sent exactly as chosen, with no automatic Mac/Windows swap. How the OS treats them still needs testing on the keyboard.</p>
+              <p className="text-sm text-muted-foreground">Left and right Control, Shift, Option/Alt and Command/Win bits are sent exactly as chosen, with no automatic Mac/Windows swap. Tested on one RK61 (0055) over USB: Menu → Left Command+C, and Fn+1 produced F1 followed by Digit1, repeated after a power cycle. Other chords, other Fn functions, models and connections remain unverified.</p>
             </div>
           </div>
           <div className="flex items-start">
@@ -615,7 +616,7 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
             </div>
             <div>
               <p className="font-semibold text-card-foreground">Per-Key RGB and Palettes</p>
-              <p className="text-sm text-muted-foreground">Available only where a custom per-key mode is established for the exact model — currently the RK61 (0055, Customize mode 14), from its configuration files. Other RGB models get global lighting only.</p>
+              <p className="text-sm text-muted-foreground">Available only where a custom per-key mode is established for the exact model — currently the RK61 (0055, Customize mode 14), from its configuration files. On that model over USB, a Q/W/E red/green/blue test and a WASD palette were confirmed, the palette surviving a power cycle; other palettes and connections remain unverified. Other RGB models get global lighting only.</p>
             </div>
           </div>
         </div>
@@ -635,7 +636,7 @@ export function HomePage({ initialKeyboards, imageManifest }: HomePageProps = {}
             </svg>
             <div>
               <p className="font-semibold text-card-foreground">Can&apos;t read existing mappings from keyboard</p>
-              <p className="text-sm text-muted-foreground">RK firmware only accepts writes. The app starts from the last state this browser sent successfully (or defaults) and can&apos;t confirm what the keyboard holds. If a transfer fails part-way, the keyboard may be partly updated; there is no rollback, so apply again.</p>
+              <p className="text-sm text-muted-foreground">This app has no configuration readback; whether RK firmware offers any undocumented read method is unproven. The app starts from the last state this browser sent successfully (or defaults) and can&apos;t confirm what the keyboard holds. If a transfer fails part-way, the keyboard may be partly updated; there is no rollback, so apply again.</p>
             </div>
           </li>
           <li className="flex items-start">
