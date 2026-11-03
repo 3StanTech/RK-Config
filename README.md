@@ -36,7 +36,7 @@ Kept from upstream: visual keyboard layout, global lighting (mode, brightness, s
 ### Steps
 
 1. Open the app at [rk-config.tristandolfo.workers.dev](https://rk-config.tristandolfo.workers.dev), or run it locally (see [For developers](#-for-developers)).
-2. Click **Connect Keyboard** and pick the keyboard in the browser dialog. Connecting sends nothing.
+2. Click **Connect keyboard** and pick the keyboard in the browser dialog. Connecting sends nothing.
 3. Stage edits on the **Key Mapping** or **Lighting** tab. The pending bar shows how many changes are waiting.
 4. Press **Apply to keyboard** on that tab, or **Discard** to drop its pending edits without sending anything. Key Mapping then asks you to confirm: **Cancel** (focused first, also Escape) sends nothing and keeps your edits pending; **Send keymap (9 reports)** sends the whole map.
 
@@ -44,7 +44,7 @@ Resetting a key or all keys to default is also staged; it only reaches the keybo
 
 **Resending lighting:** when no lighting edits are pending, the Lighting bar offers **Resend lighting** (the shown settings match what this browser last sent) or **Send shown lighting** (nothing was sent from this browser yet, so the shown settings are app defaults). Use it when the keyboard's lighting was changed elsewhere, for example by Fn shortcuts or a keyboard reset. It sends 1 report, or 8 (1 + 7) when the shown mode is the model's custom per-key mode, and never sends the keymap or touches pending key edits. Key Mapping has no equivalent: a keymap is sent only when key edits are pending or as **Retry Apply** after a failed transfer, always with confirmation.
 
-**Try without a keyboard:** demo mode lets you explore any listed model. Apply is only simulated there: nothing is written to hardware or saved in the browser, and a demo apply never counts as evidence that a model works.
+**Try without a keyboard:** choose **Try the demo** (or **Try in demo** on any row of the model catalog) to explore a listed model. Apply is only simulated there: nothing is written to hardware or saved in the browser, and a demo apply never counts as evidence that a model works.
 
 ### What Apply sends
 

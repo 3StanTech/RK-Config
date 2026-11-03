@@ -3,6 +3,7 @@ import { getRKDevices } from '../utils/rkConfig.server';
 import { buildImageManifest } from '../utils/buildImageManifest';
 import { buildLedManifest, serializeLedManifest } from '../utils/buildLedManifest';
 import App from '../components/App';
+import { defaultPresets, DEFAULT_THEME_PRESET } from '../utils/theme-presets';
 import '../index.css';
 
 // Load keyboards and manifests at build time
@@ -11,6 +12,8 @@ const keyboards = Array.from(devices.entries()).map(([pid, name]) => ({ pid, nam
 const imageManifest = await buildImageManifest();
 const ledManifest = buildLedManifest();
 const ledManifestJson = serializeLedManifest(ledManifest);
+// First-visit theme, inlined so the first paint matches what ThemeSelector applies after hydration
+const defaultThemeStyles = defaultPresets[DEFAULT_THEME_PRESET].styles;
 
 // SEO and metadata
 const siteName = 'RK Configurator';
@@ -68,6 +71,8 @@ const structuredData = canonicalUrl && {
 
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     <!-- Self-hosted Inter font (fallback for some themes) -->
     <link rel="stylesheet" href="/fonts/inter/inter.css" />
@@ -77,7 +82,7 @@ const structuredData = canonicalUrl && {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
     <!-- Theme initialization (prevent FOUC) -->
-    <script is:inline>
+    <script is:inline define:vars={{ defaultThemeStyles }}>
       (function() {
         // Apply light/dark mode
         const theme = localStorage.getItem('theme') || 'system';
@@ -89,70 +94,77 @@ const structuredData = canonicalUrl && {
           document.documentElement.classList.add('dark');
         }
 
-        // Apply theme preset colors and styles instantly
+        // Apply theme preset colors and styles instantly (stored preset, else the first-visit default)
+        let themeStyles = defaultThemeStyles;
         const themeStylesJson = localStorage.getItem('themeStyles');
         if (themeStylesJson) {
           try {
-            const themeStyles = JSON.parse(themeStylesJson);
-            const styles = themeStyles[effective];
+            themeStyles = JSON.parse(themeStylesJson);
+          } catch {
+            // Fall back to the default if the stored JSON is invalid
+          }
+        }
+        try {
+          const styles = themeStyles[effective];
 
-            if (styles) {
-              const root = document.documentElement;
+          if (styles) {
+            const root = document.documentElement;
 
-              // Preload the theme font for faster loading (display=swap shows fallback while loading)
-              // Skip Inter since it's self-hosted
-              if (styles['font-sans'] && !styles['font-sans'].includes('system-ui')) {
-                const fontName = styles['font-sans'].split(',')[0].trim().replace(/['"]/g, '');
-                const systemFonts = ['Arial', 'Helvetica', 'Times New Roman', 'Courier New', 'Georgia', 'Verdana', 'Inter'];
-                if (!systemFonts.includes(fontName)) {
-                  const preloadLink = document.createElement('link');
-                  preloadLink.rel = 'preload';
-                  preloadLink.as = 'style';
-                  preloadLink.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontName)}:wght@400;500;600;700&display=swap`;
-                  document.head.appendChild(preloadLink);
-                }
-              }
-
-              // Apply all theme properties except fonts (fonts load async)
-              Object.entries(styles).forEach(([key, value]) => {
-                if (typeof value === 'string' && !key.startsWith('font-')) {
-                  root.style.setProperty(`--${key}`, value);
-                }
-              });
-
-              // Build shadows from theme properties
-              const shadowColor = styles['shadow-color'];
-              const shadowOpacity = styles['shadow-opacity'];
-              const shadowBlur = styles['shadow-blur'];
-              const shadowSpread = styles['shadow-spread'];
-              const shadowOffsetX = styles['shadow-offset-x'];
-              const shadowOffsetY = styles['shadow-offset-y'];
-
-              if (shadowColor && shadowOpacity && shadowBlur !== undefined && shadowOffsetX && shadowOffsetY) {
-                const spread = shadowSpread || '0px';
-                const opacityNum = parseFloat(shadowOpacity) || 0.1;
-
-                // Build shadow string
-                let shadow;
-                if (shadowColor.includes('/') || shadowColor.includes('rgba')) {
-                  shadow = `${shadowOffsetX} ${shadowOffsetY} ${shadowBlur} ${spread} ${shadowColor}`;
-                } else {
-                  shadow = `${shadowOffsetX} ${shadowOffsetY} ${shadowBlur} ${spread} ${shadowColor.replace(')', ` / ${opacityNum})`)}`;
-                }
-
-                // Apply to all shadow utilities
-                root.style.setProperty('--shadow-xs', shadow);
-                root.style.setProperty('--shadow-sm', shadow);
-                root.style.setProperty('--shadow', shadow);
-                root.style.setProperty('--shadow-md', shadow);
-                root.style.setProperty('--shadow-lg', shadow);
-                root.style.setProperty('--shadow-xl', shadow);
-                root.style.setProperty('--shadow-2xl', shadow);
+            // Preload the theme font for faster loading (display=swap shows fallback while loading)
+            // Skip Inter since it's self-hosted
+            // Dark styles may omit fonts (they come from light mode)
+            const fontSans = styles['font-sans'] || (themeStyles.light && themeStyles.light['font-sans']);
+            if (fontSans && !fontSans.includes('system-ui')) {
+              const fontName = fontSans.split(',')[0].trim().replace(/['"]/g, '');
+              const systemFonts = ['Arial', 'Helvetica', 'Times New Roman', 'Courier New', 'Georgia', 'Verdana', 'Inter'];
+              if (!systemFonts.includes(fontName)) {
+                const preloadLink = document.createElement('link');
+                preloadLink.rel = 'preload';
+                preloadLink.as = 'style';
+                preloadLink.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontName)}:wght@400;500;600;700&display=swap`;
+                document.head.appendChild(preloadLink);
               }
             }
-          } catch {
-            // Silently fail if JSON is invalid
+
+            // Apply all theme properties except fonts (fonts load async)
+            Object.entries(styles).forEach(([key, value]) => {
+              if (typeof value === 'string' && !key.startsWith('font-')) {
+                root.style.setProperty(`--${key}`, value);
+              }
+            });
+
+            // Build shadows from theme properties
+            const shadowColor = styles['shadow-color'];
+            const shadowOpacity = styles['shadow-opacity'];
+            const shadowBlur = styles['shadow-blur'];
+            const shadowSpread = styles['shadow-spread'];
+            const shadowOffsetX = styles['shadow-offset-x'];
+            const shadowOffsetY = styles['shadow-offset-y'];
+
+            if (shadowColor && shadowOpacity && shadowBlur !== undefined && shadowOffsetX && shadowOffsetY) {
+              const spread = shadowSpread || '0px';
+              const opacityNum = parseFloat(shadowOpacity) || 0.1;
+
+              // Build shadow string
+              let shadow;
+              if (shadowColor.includes('/') || shadowColor.includes('rgba')) {
+                shadow = `${shadowOffsetX} ${shadowOffsetY} ${shadowBlur} ${spread} ${shadowColor}`;
+              } else {
+                shadow = `${shadowOffsetX} ${shadowOffsetY} ${shadowBlur} ${spread} ${shadowColor.replace(')', ` / ${opacityNum})`)}`;
+              }
+
+              // Apply to all shadow utilities
+              root.style.setProperty('--shadow-xs', shadow);
+              root.style.setProperty('--shadow-sm', shadow);
+              root.style.setProperty('--shadow', shadow);
+              root.style.setProperty('--shadow-md', shadow);
+              root.style.setProperty('--shadow-lg', shadow);
+              root.style.setProperty('--shadow-xl', shadow);
+              root.style.setProperty('--shadow-2xl', shadow);
+            }
           }
+        } catch {
+          // Silently fail if the stored styles are malformed
         }
       })();
     </script>
@@ -164,8 +176,8 @@ const structuredData = canonicalUrl && {
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-0 focus:left-0 focus:z-50 focus:p-4 focus:bg-primary focus:text-primary-foreground">
       Skip to main content
     </a>
-    <main id="main-content">
+    <div>
       <App client:load initialKeyboards={keyboards} imageManifest={imageManifest} ledManifest={ledManifestJson} />
-    </main>
+    </div>
   </body>
 </html>

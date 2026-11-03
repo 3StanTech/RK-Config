@@ -41,7 +41,7 @@ export function KeyboardSelector({ keyboards, onSelect, currentPid, showRandom =
               className="gap-2"
             >
               <Shuffle className="w-5 h-5" />
-              Pick Random Keyboard
+              Pick a random keyboard
             </Button>
           </div>
 
@@ -60,7 +60,7 @@ export function KeyboardSelector({ keyboards, onSelect, currentPid, showRandom =
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search keyboards..."
+          placeholder="Filter by model name or PID…"
           className="pl-10 w-full"
         />
       </div>

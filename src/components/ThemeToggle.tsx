@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
-import { defaultPresets } from '@/utils/theme-presets';
+import { defaultPresets, DEFAULT_THEME_PRESET } from '@/utils/theme-presets';
 import { applyThemeStylesForToggle } from '@/utils/themeUtils';
 
 // Zod schema for theme validation
@@ -42,9 +42,9 @@ function applyTheme(theme: Theme) {
     document.documentElement.classList.remove('dark');
   }
 
-  // Apply theme preset colors if selected
-  const presetKey = localStorage.getItem('themePreset');
-  if (presetKey && defaultPresets[presetKey]) {
+  // Apply the selected preset's colors (first-time visitors have none stored yet: use the default)
+  const presetKey = localStorage.getItem('themePreset') || DEFAULT_THEME_PRESET;
+  if (defaultPresets[presetKey]) {
     const preset = defaultPresets[presetKey];
     const styles = preset.styles[effective];
     applyThemeStylesForToggle(styles);
@@ -85,7 +85,7 @@ export function ThemeToggle() {
   };
 
   if (!mounted) {
-    return <div className="size-9" />;
+    return <div className="size-[34px]" />;
   }
 
   const currentEffective = getEffectiveTheme(theme);
@@ -93,8 +93,9 @@ export function ThemeToggle() {
   return (
     <Button
       onClick={cycleTheme}
-      variant="ghost"
+      variant="outline"
       size="icon"
+      className="size-[34px] rounded-full border-border bg-background dark:bg-background dark:border-border text-foreground"
       title={`Theme: ${theme}${theme === 'system' ? ` (${currentEffective})` : ''}`}
       aria-label="Toggle theme"
     >

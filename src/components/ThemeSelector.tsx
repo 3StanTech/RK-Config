@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { defaultPresets } from '@/utils/theme-presets';
+import { defaultPresets, DEFAULT_THEME_PRESET } from '@/utils/theme-presets';
 import { applyThemeStyles } from '@/utils/themeUtils';
 
 // Zod schema for theme mode validation
@@ -33,7 +33,7 @@ function getEffectiveMode(mode: ThemeMode): 'light' | 'dark' {
 }
 
 export function ThemeSelector() {
-  const [themePreset, setThemePreset] = useState<string>('claymorphism');
+  const [themePreset, setThemePreset] = useState<string>(DEFAULT_THEME_PRESET);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -45,10 +45,10 @@ export function ThemeSelector() {
       // Ensure styles are stored for next load
       localStorage.setItem('themeStyles', JSON.stringify(defaultPresets[stored].styles));
     } else {
-      // Default to claymorphism for first-time visitors
-      setThemePreset('claymorphism');
-      applyCurrentTheme('claymorphism');
-      localStorage.setItem('themeStyles', JSON.stringify(defaultPresets['claymorphism'].styles));
+      // First-time visitors get the house default
+      setThemePreset(DEFAULT_THEME_PRESET);
+      applyCurrentTheme(DEFAULT_THEME_PRESET);
+      localStorage.setItem('themeStyles', JSON.stringify(defaultPresets[DEFAULT_THEME_PRESET].styles));
     }
   }, []);
 
@@ -90,7 +90,7 @@ export function ThemeSelector() {
   };
 
   if (!mounted) {
-    return <div className="w-40" />;
+    return <div className="h-[34px] w-[150px] max-sm:w-[124px]" />;
   }
 
   const presetOptions = Object.entries(defaultPresets)
@@ -102,7 +102,7 @@ export function ThemeSelector() {
 
   return (
     <Select value={themePreset} onValueChange={handleThemeChange}>
-      <SelectTrigger className="w-40">
+      <SelectTrigger aria-label="Theme" className="h-[34px] data-[size=default]:h-[34px] w-[150px] rounded-full border-border bg-background dark:bg-background text-[13px] text-foreground max-sm:w-[124px]">
         <SelectValue placeholder="Select theme" />
       </SelectTrigger>
       <SelectContent>

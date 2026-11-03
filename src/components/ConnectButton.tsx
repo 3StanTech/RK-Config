@@ -3,7 +3,7 @@ import { useDevices } from '../hooks/useDevices';
 import { Spinner } from './Spinner';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { TriangleAlert } from 'lucide-react';
+import { TriangleAlert, Usb } from 'lucide-react';
 import { ERROR_MESSAGES } from '../constants/errorMessages';
 
 export function ConnectButton() {
@@ -17,15 +17,15 @@ export function ConnectButton() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center gap-4 w-full max-w-md">
+    <div className="flex flex-col items-center gap-4 max-sm:w-full">
       <Button
         onClick={requestDevice}
         disabled={!isWebHIDSupported || isConnecting}
         size="lg"
-        className="px-8 py-6 text-lg shadow-lg hover:shadow-xl"
+        className="h-[52px] w-full rounded-full px-[26px] text-[15.5px] font-bold shadow-[0_6px_20px_-8px_color-mix(in_srgb,var(--primary)_70%,transparent)] hover:bg-primary hover:brightness-[1.06] [&_svg:not([class*='size-'])]:size-[17px]"
       >
-        {isConnecting && <Spinner size="md" className="text-primary-foreground" />}
-        {isConnecting ? 'Connecting...' : 'Connect Keyboard'}
+        {isConnecting ? <Spinner size="md" className="text-primary-foreground" /> : <Usb aria-hidden="true" />}
+        {isConnecting ? 'Connecting...' : 'Connect keyboard'}
       </Button>
 
       {mounted && !isWebHIDSupported && (

@@ -115,115 +115,116 @@ body {
   --font-serif: Source Serif 4, serif;
 }
 
+/* Fallbacks = RK Cream (DEFAULT_THEME_PRESET); presets override these at runtime */
 :root {
-  --radius: 1.25rem;
-  --background: #e7e5e4;
-  --foreground: #1e293b;
-  --card: #f5f5f4;
-  --card-foreground: #1e293b;
-  --popover: #f5f5f4;
-  --popover-foreground: #1e293b;
-  --primary: #6366f1;
-  --primary-foreground: #ffffff;
-  --secondary: #d6d3d1;
-  --secondary-foreground: #4b5563;
-  --muted: #e7e5e4;
-  --muted-foreground: #6b7280;
-  --accent: #f3e5f5;
-  --accent-foreground: #374151;
-  --destructive: #ef4444;
+  --background: #ebe5d6;
+  --foreground: #2b2824;
+  --card: #f6f2e7;
+  --card-foreground: #2b2824;
+  --popover: #f6f2e7;
+  --popover-foreground: #2b2824;
+  --primary: #b8461b;
+  --primary-foreground: #fff8f0;
+  --secondary: #d3ccbb;
+  --secondary-foreground: #2b2824;
+  --muted: #e2dccd;
+  --muted-foreground: #625c52;
+  --accent: #f3d9c6;
+  --accent-foreground: #6b2a10;
+  --destructive: #b42318;
   --destructive-foreground: #ffffff;
-  --border: #d6d3d1;
-  --input: #d6d3d1;
-  --ring: #6366f1;
-  --chart-1: #6366f1;
-  --chart-2: #4f46e5;
-  --chart-3: #4338ca;
-  --chart-4: #3730a3;
-  --chart-5: #312e81;
-  --sidebar: #d6d3d1;
-  --sidebar-foreground: #1e293b;
-  --sidebar-primary: #6366f1;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f3e5f5;
-  --sidebar-accent-foreground: #374151;
-  --sidebar-border: #d6d3d1;
-  --sidebar-ring: #6366f1;
-  --shadow-color: hsl(240 4% 60%);
-  --shadow-opacity: 0.18;
-  --shadow-blur: 10px;
-  --shadow-spread: 4px;
-  --shadow-offset-x: 2px;
-  --shadow-offset-y: 2px;
+  --border: #cdc5b2;
+  --input: #cdc5b2;
+  --ring: #b8461b;
+  --chart-1: #b8461b;
+  --chart-2: #e2683c;
+  --chart-3: #6b655b;
+  --chart-4: #2b2824;
+  --chart-5: #d3ccbb;
+  --sidebar: #e2dccd;
+  --sidebar-foreground: #2b2824;
+  --sidebar-primary: #b8461b;
+  --sidebar-primary-foreground: #fff8f0;
+  --sidebar-accent: #f3d9c6;
+  --sidebar-accent-foreground: #6b2a10;
+  --sidebar-border: #cdc5b2;
+  --sidebar-ring: #b8461b;
+  --radius: 0.6rem;
+  --shadow-color: hsl(35 15% 45%);
+  --shadow-opacity: 0.45;
+  --shadow-blur: 0px;
+  --shadow-spread: 0px;
+  --shadow-offset-x: 0px;
+  --shadow-offset-y: 3px;
   --letter-spacing: 0em;
   --spacing: 0.25rem;
-  --shadow-2xs: 2px 2px 10px 4px hsl(240 4% 60% / 0.18);
-  --shadow-xs: 2px 2px 10px 4px hsl(240 4% 60% / 0.18);
-  --shadow-sm: 2px 2px 10px 4px hsl(240 4% 60% / 0.18);
-  --shadow: 2px 2px 10px 4px hsl(240 4% 60% / 0.18);
-  --shadow-md: 2px 2px 10px 4px hsl(240 4% 60% / 0.18);
-  --shadow-lg: 2px 2px 10px 4px hsl(240 4% 60% / 0.18);
-  --shadow-xl: 2px 2px 10px 4px hsl(240 4% 60% / 0.18);
-  --shadow-2xl: 2px 2px 10px 4px hsl(240 4% 60% / 0.18);
+  --shadow-2xs: 0px 3px 0px 0px hsl(35 15% 45% / 0.45);
+  --shadow-xs: 0px 3px 0px 0px hsl(35 15% 45% / 0.45);
+  --shadow-sm: 0px 3px 0px 0px hsl(35 15% 45% / 0.45);
+  --shadow: 0px 3px 0px 0px hsl(35 15% 45% / 0.45);
+  --shadow-md: 0px 3px 0px 0px hsl(35 15% 45% / 0.45);
+  --shadow-lg: 0px 3px 0px 0px hsl(35 15% 45% / 0.45);
+  --shadow-xl: 0px 3px 0px 0px hsl(35 15% 45% / 0.45);
+  --shadow-2xl: 0px 3px 0px 0px hsl(35 15% 45% / 0.45);
   --tracking-normal: 0em;
-  --font-sans: "Plus Jakarta Sans", sans-serif;
+  --font-sans: "Rubik", sans-serif;
   --font-serif: "Lora", serif;
-  --font-mono: "Roboto Mono", monospace;
+  --font-mono: "JetBrains Mono", monospace;
 }
 
 .dark {
-  --background: #1e1b18;
-  --foreground: #e2e8f0;
-  --card: #2c2825;
-  --card-foreground: #e2e8f0;
-  --popover: #2c2825;
-  --popover-foreground: #e2e8f0;
-  --primary: #818cf8;
-  --primary-foreground: #1e1b18;
-  --secondary: #3a3633;
-  --secondary-foreground: #d1d5db;
-  --muted: #1f1c19;
-  --muted-foreground: #9ca3af;
-  --accent: #484441;
-  --accent-foreground: #d1d5db;
-  --destructive: #ef4444;
-  --destructive-foreground: #1e1b18;
-  --border: #3a3633;
-  --input: #3a3633;
-  --ring: #818cf8;
-  --chart-1: #818cf8;
-  --chart-2: #6366f1;
-  --chart-3: #4f46e5;
-  --chart-4: #4338ca;
-  --chart-5: #3730a3;
-  --radius: 1.25rem;
-  --sidebar: #3a3633;
-  --sidebar-foreground: #e2e8f0;
-  --sidebar-primary: #818cf8;
-  --sidebar-primary-foreground: #1e1b18;
-  --sidebar-accent: #484441;
-  --sidebar-accent-foreground: #d1d5db;
-  --sidebar-border: #3a3633;
-  --sidebar-ring: #818cf8;
+  --background: #22201d;
+  --foreground: #ece6d8;
+  --card: #2d2a26;
+  --card-foreground: #ece6d8;
+  --popover: #2d2a26;
+  --popover-foreground: #ece6d8;
+  --primary: #f08a52;
+  --primary-foreground: #2a1406;
+  --secondary: #3a3631;
+  --secondary-foreground: #ece6d8;
+  --muted: #2a2723;
+  --muted-foreground: #a39b8c;
+  --accent: #4a2e1e;
+  --accent-foreground: #ffd7bf;
+  --destructive: #ff7a6b;
+  --destructive-foreground: #2a1406;
+  --border: #3d3934;
+  --input: #3d3934;
+  --ring: #f08a52;
+  --chart-1: #f08a52;
+  --chart-2: #e2683c;
+  --chart-3: #a39b8c;
+  --chart-4: #ece6d8;
+  --chart-5: #3a3631;
+  --sidebar: #2a2723;
+  --sidebar-foreground: #ece6d8;
+  --sidebar-primary: #f08a52;
+  --sidebar-primary-foreground: #2a1406;
+  --sidebar-accent: #4a2e1e;
+  --sidebar-accent-foreground: #ffd7bf;
+  --sidebar-border: #3d3934;
+  --sidebar-ring: #f08a52;
+  --radius: 0.6rem;
   --shadow-color: hsl(0 0% 0%);
-  --shadow-opacity: 0.3;
-  --shadow-blur: 10px;
-  --shadow-spread: 4px;
-  --shadow-offset-x: 2px;
-  --shadow-offset-y: 2px;
+  --shadow-opacity: 0.6;
+  --shadow-blur: 0px;
+  --shadow-spread: 0px;
+  --shadow-offset-x: 0px;
+  --shadow-offset-y: 3px;
   --letter-spacing: 0em;
   --spacing: 0.25rem;
-  --shadow-2xs: 2px 2px 10px 4px hsl(0 0% 0% / 0.3);
-  --shadow-xs: 2px 2px 10px 4px hsl(0 0% 0% / 0.3);
-  --shadow-sm: 2px 2px 10px 4px hsl(0 0% 0% / 0.3);
-  --shadow: 2px 2px 10px 4px hsl(0 0% 0% / 0.3);
-  --shadow-md: 2px 2px 10px 4px hsl(0 0% 0% / 0.3);
-  --shadow-lg: 2px 2px 10px 4px hsl(0 0% 0% / 0.3);
-  --shadow-xl: 2px 2px 10px 4px hsl(0 0% 0% / 0.3);
-  --shadow-2xl: 2px 2px 10px 4px hsl(0 0% 0% / 0.3);
-  --font-sans: "Plus Jakarta Sans", sans-serif;
+  --shadow-2xs: 0px 3px 0px 0px hsl(0 0% 0% / 0.6);
+  --shadow-xs: 0px 3px 0px 0px hsl(0 0% 0% / 0.6);
+  --shadow-sm: 0px 3px 0px 0px hsl(0 0% 0% / 0.6);
+  --shadow: 0px 3px 0px 0px hsl(0 0% 0% / 0.6);
+  --shadow-md: 0px 3px 0px 0px hsl(0 0% 0% / 0.6);
+  --shadow-lg: 0px 3px 0px 0px hsl(0 0% 0% / 0.6);
+  --shadow-xl: 0px 3px 0px 0px hsl(0 0% 0% / 0.6);
+  --shadow-2xl: 0px 3px 0px 0px hsl(0 0% 0% / 0.6);
+  --font-sans: "Rubik", sans-serif;
   --font-serif: "Lora", serif;
-  --font-mono: "Roboto Mono", monospace;
+  --font-mono: "JetBrains Mono", monospace;
 }
 
 @layer base {
@@ -260,15 +261,103 @@ body {
   white-space: normal;
 }
 
-/* Keyboard image visibility states */
-.kb-img-hidden {
-  opacity: 0;
-  pointer-events: none;
-  visibility: hidden;
+/* Stage canvas: dotted background behind every view */
+body {
+  background-color: var(--background);
+  background-image: radial-gradient(color-mix(in srgb, var(--foreground) 15%, transparent) 1px, transparent 1.3px);
+  background-size: 22px 22px;
+  background-attachment: fixed;
 }
 
-.kb-img-visible {
-  opacity: 1;
-  pointer-events: auto;
-  visibility: visible;
+/* Floating panel: header, cards, footer and dialogs sit on the canvas.
+   Layered so per-component utilities (rounded-full, text colours) can override it. */
+@layer components {
+  .float {
+    background: color-mix(in srgb, var(--card) 92%, transparent);
+    color: var(--card-foreground);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+    box-shadow: var(--shadow-xl), 0 1px 0 color-mix(in srgb, var(--foreground) 4%, transparent);
+    backdrop-filter: blur(12px);
+  }
 }
+
+/* Hero keyboard (D5 colourway, fixed in every theme and mode) */
+.kb-hero {
+  --kb-board: #4b4844;
+  --kb-cap: #f7f4ec;
+  --kb-ledge: #d3cdbf;
+  --kb-legend: #2b2824;
+  --kb-gap: 6px;
+  container-type: inline-size;
+  display: grid;
+  gap: var(--kb-gap);
+  width: 100%;
+}
+.kb-hero .kb-row { display: grid; grid-template-columns: repeat(60, minmax(0, 1fr)); gap: var(--kb-gap); }
+.kb-hero .kb-key {
+  --u: calc((100cqi - 14 * var(--kb-gap)) / 15);
+  position: relative;
+  height: var(--u);
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: max(9px, calc(var(--u) * 0.2));
+  line-height: 1.1;
+}
+.kb-hero .kb-cap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: max(4px, calc(var(--radius) * 0.55));
+  background: color-mix(in srgb, var(--led, var(--kb-cap)) 30%, var(--kb-cap));
+  color: var(--kb-legend);
+  border: 1px solid #e4dfd3;
+  border-bottom: max(3px, calc(var(--u) * 0.09)) solid color-mix(in srgb, var(--led, var(--kb-ledge)) 60%, var(--kb-ledge));
+}
+.kb-hero .kb-cap::before {
+  content: '';
+  position: absolute;
+  inset: 6% 9% 10%;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.5), transparent 60%);
+  pointer-events: none;
+}
+.kb-hero .kb-l { position: absolute; left: 14%; top: 12%; font-weight: 600; white-space: nowrap; }
+.stage3d { perspective: 1500px; width: 100%; max-width: 1060px; margin: 40px auto 0; }
+.stage3d .tilt {
+  transform: rotateX(30deg);
+  transform-origin: 50% 80%;
+  padding: clamp(8px, 1.6vw, 20px);
+  border-radius: calc(var(--radius) + 12px);
+  background: #4b4844;
+  box-shadow: 0 40px 80px -30px rgba(20, 18, 15, 0.55), inset 0 2px 0 rgba(255, 255, 255, 0.14);
+}
+@media (max-width: 640px) { .stage3d .tilt { transform: rotateX(18deg); } }
+
+/* How it works: nodes joined by dashed wires (desktop only) */
+.how-step::before, .how-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 32px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 2px solid var(--primary);
+}
+.how-step::before { left: -7px; }
+.how-step:first-child::before { display: none; }
+.how-step:not(:last-child)::after { right: -7px; }
+.how-step .how-wire {
+  position: absolute;
+  top: 37px;
+  left: 100%;
+  width: 72px;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, var(--primary) 0 6px, transparent 6px 11px);
+}
+.how-step:last-child .how-wire { display: none; }
+@media (max-width: 860px) { .how-step::before, .how-step::after, .how-step .how-wire { display: none; } }
+
+/* Demo picker dialog backdrop */
+.demo-dialog::backdrop { background: color-mix(in srgb, var(--foreground) 35%, transparent); }
