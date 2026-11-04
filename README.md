@@ -142,13 +142,14 @@ Local builds emit no canonical or structured-data URLs; those are added only whe
 
 ### Hosting
 
-The public site is the static build uploaded directly to Cloudflare Workers Static Assets (service `rk-config`) through the Cloudflare dashboard. It is not connected to Git, so pushing to GitHub does not deploy anything. To publish an update:
+The public site is the static build served by Cloudflare Workers Static Assets (service `rk-config`). Workers Builds is connected to this repository: every push to `main` builds the site with `bun run build` (the `SITE_URL` build variable is set in the dashboard) and deploys it with `npx wrangler deploy`. No server-side rendering, database or other backend is involved.
+
+To deploy by hand instead, for example from a local checkout:
 
 ```bash
 SITE_URL=https://rk-config.tristandolfo.workers.dev bun run build
+npx --yes wrangler@4 deploy --name rk-config --assets ./dist --compatibility-date 2026-11-01
 ```
-
-Then upload the contents of `dist/` to the existing `rk-config` service in the dashboard. No server-side rendering, database or other backend is involved.
 
 The GitHub Pages workflow (`.github/workflows/deploy.yml`) is an unused alternative, not the current host; it runs only on manual dispatch and validates before deploying. Pull requests are checked by `pr-check.yml`.
 
