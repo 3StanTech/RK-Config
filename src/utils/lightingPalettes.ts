@@ -153,8 +153,37 @@ export function columnsPalette(
 }
 
 export const PALETTE_PRESETS = [
-  { id: 'wasd', name: 'WASD blue / rest white', build: (config: PaletteKeys) => wasdPalette(config) },
-  { id: 'columns', name: 'Cyan / purple columns', build: (config: PaletteKeys) => columnsPalette(config) },
+  { id: 'wasd', name: 'WASD blue, rest white', build: (config: PaletteKeys) => wasdPalette(config) },
+  { id: 'columns', name: 'Cyan and purple columns', build: (config: PaletteKeys) => columnsPalette(config) },
 ] as const;
 
 export type PalettePresetId = typeof PALETTE_PRESETS[number]['id'];
+
+/** Display labels for the lighting sliders, indexed by setting value - 1. */
+export const SPEED_LABELS = ['Very Slow', 'Slow', 'Normal', 'Fast', 'Very Fast'];
+export const SLEEP_LABELS = ['5 min', '10 min', '20 min', '30 min', 'Off'];
+
+/** One-click colours offered for global lighting and per-key painting. */
+export const QUICK_COLORS: ReadonlyArray<{ name: string } & RgbColor> = [
+  { name: 'White', r: 255, g: 255, b: 255 },
+  { name: 'Red', r: 255, g: 0, b: 0 },
+  { name: 'Orange', r: 255, g: 165, b: 0 },
+  { name: 'Yellow', r: 255, g: 255, b: 0 },
+  { name: 'Green', r: 0, g: 255, b: 0 },
+  { name: 'Cyan', r: 0, g: 255, b: 255 },
+  { name: 'Blue', r: 0, g: 0, b: 255 },
+  { name: 'Magenta', r: 255, g: 0, b: 255 },
+];
+
+/** `#RRGGBB`, upper case. */
+export function toHex(c: RgbColor): string {
+  return `#${[c.r, c.g, c.b].map(v => v.toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+}
+
+/** Parses a 6-digit hex colour (with or without `#`); null when invalid. */
+export function fromHex(value: string): RgbColor | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(value.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return { r: (n >> 16) & 0xff, g: (n >> 8) & 0xff, b: n & 0xff };
+}

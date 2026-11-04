@@ -9,6 +9,7 @@ import { getDeviceName } from './rkConfig';
 import { parseLedXml } from './ledXmlParser';
 import { decodeKBIni } from './keyboardImages';
 import { extractLocale } from './localeLabels';
+import { layoutKeys } from './keyboardGeometry';
 
 /**
  * Parse a single key entry from KB.ini
@@ -56,21 +57,56 @@ function parseLedOptEntry(value: string): LightingModeFlags | null {
 }
 
 /**
+ * Parse the [KEY] section of KB.ini text into keys
+ */
+export function parseKeySection(text: string): Key[] {
+  const parsed = ini.parse(text);
+  const keys: Key[] = [];
+  if (!parsed.KEY) return keys;
+
+  for (const [keyName, value] of Object.entries(parsed.KEY)) {
+    if (!keyName.startsWith('K')) {
+      continue;
+    }
+
+    if (typeof value !== 'string') {
+      console.error(`Invalid value type for ${keyName}: expected string, got ${typeof value}`);
+      continue;
+    }
+
+    const key = parseKeyEntry(value, keyName);
+    if (key) keys.push(key);
+  }
+  return keys;
+}
+
+/**
+ * ISO outline from an active `UnRectKey = id,x,y,x,y,…` line. Most files only carry it
+ * as a commented-out template line (`;UnRectKey`), which is ignored.
+ */
+export function parseUnRectKey(text: string): number[] | null {
+  const m = /^[ \t]*UnRectKey[ \t]*=[ \t]*([^\r\n]+)/im.exec(text);
+  if (!m) return null;
+  const nums = m[1].split(',').map(v => parseInt(v.trim(), 10));
+  return nums.every(n => Number.isFinite(n)) ? nums : null;
+}
+
+/**
  * Try to fetch KB.ini handling case-sensitivity of directory names
  */
-async function fetchKBIni(pid: string): Promise<{ text: string; dirCase: string } | null> {
+async function fetchKBIni(pid: string): Promise<{ text: string } | null> {
   // Try uppercase first (most common)
   let response = await fetch(`${import.meta.env.BASE_URL}rk/Dev/${pid.toUpperCase()}/KB.ini`);
   if (response.ok) {
     const buffer = await response.arrayBuffer();
-    return { text: decodeKBIni(buffer), dirCase: pid.toUpperCase() };
+    return { text: decodeKBIni(buffer) };
   }
 
   // Try lowercase
   response = await fetch(`${import.meta.env.BASE_URL}rk/Dev/${pid.toLowerCase()}/KB.ini`);
   if (response.ok) {
     const buffer = await response.arrayBuffer();
-    return { text: decodeKBIni(buffer), dirCase: pid.toLowerCase() };
+    return { text: decodeKBIni(buffer) };
   }
 
   return null;
@@ -95,43 +131,8 @@ export async function parseKBIni(pid: string, ledManifest: string | null = null)
       return null;
     }
 
-    const keys: Key[] = [];
-
-    // Parse all key entries
-    for (const [keyName, value] of Object.entries(parsed.KEY)) {
-      if (!keyName.startsWith('K')) {
-        continue;
-      }
-
-      if (typeof value !== 'string') {
-        console.error(`Invalid value type for ${keyName}: expected string, got ${typeof value}`);
-        continue;
-      }
-
-      const key = parseKeyEntry(value, keyName);
-      if (!key) {
-        continue;
-      }
-
-      keys.push(key);
-    }
-
-    // Determine image URL - check for KbImgUse reference
-    const kbImgUse = parsed.OPT?.KbImgUse;
-    const useLEDImg = parsed.OPT?.KeyUseLEDImg;
-    const imageName = useLEDImg ? 'kbled.png' : 'keyimg.png';
-    let imageUrl: string;
-
-    if (kbImgUse) {
-      // KbImgUse is a hex reference to another device's image
-      const referencePid = kbImgUse.replace('0x', '').toLowerCase();
-      const refKbIni = await fetchKBIni(referencePid);
-      const refDirCase = refKbIni?.dirCase || referencePid.toUpperCase();
-      imageUrl = `${import.meta.env.BASE_URL}rk/Dev/${refDirCase}/${imageName}`;
-    } else {
-      // Use this device's own image
-      imageUrl = `${import.meta.env.BASE_URL}rk/Dev/${kbIni.dirCase}/${imageName}`;
-    }
+    const keys = parseKeySection(text);
+    const layout = layoutKeys(keys, parseUnRectKey(text));
 
     // Parse lighting capabilities
     const rgb = parsed.OPT?.RGBKb === '1';
@@ -201,7 +202,7 @@ export async function parseKBIni(pid: string, ledManifest: string | null = null)
       name,
       locale,
       keys,
-      imageUrl,
+      layout,
       lightEnabled,
       rgb,
       lightingType,
@@ -210,24 +211,5 @@ export async function parseKBIni(pid: string, ledManifest: string | null = null)
   } catch (error) {
     console.error(`Failed to parse KB.ini for PID ${pid}:`, error);
     return null;
-  }
-}
-
-/**
- * Check if keyimg.png exists for a PID
- */
-export async function hasKeyboardImage(pid: string): Promise<boolean> {
-  try {
-    // Try uppercase first
-    let response = await fetch(`${import.meta.env.BASE_URL}rk/Dev/${pid.toUpperCase()}/keyimg.png`, { method: 'HEAD' });
-    if (response.ok) {
-      return true;
-    }
-
-    // Try lowercase
-    response = await fetch(`${import.meta.env.BASE_URL}rk/Dev/${pid.toLowerCase()}/keyimg.png`, { method: 'HEAD' });
-    return response.ok;
-  } catch {
-    return false;
   }
 }

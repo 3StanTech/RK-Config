@@ -22,8 +22,9 @@ Compared with upstream KludgeKnight:
 4. **Staged changes with Apply**: edits stay pending until you press Apply. Key Mapping and Lighting each have their own Apply and Discard, so applying one never sends the other's pending edits. Every keymap send asks for confirmation first, and lighting can be resent on purpose when nothing is pending.
 5. **Remembered per-key colors**: the last successfully applied keymap, lighting and per-key colors are kept in this browser.
 6. **Feature evidence labels**: each model shows how well each feature is actually backed, so a model listed in RK's files is not presented as proven.
+7. **Keyboards drawn in code**: each model's keyboard is drawn from its own key data in RK's configuration files (two models whose key data this app can't read show a note instead), snapped to an even key grid (with the L-shaped Enter on ISO boards), instead of RK's product photos.
 
-Kept from upstream: visual keyboard layout, global lighting (mode, brightness, speed, sleep, color), a demo mode, and keyboard configurations taken from the official RK Windows software.
+Kept from upstream: global lighting (mode, brightness, speed, sleep, color), a demo mode, and keyboard configurations taken from the official RK Windows software.
 
 ## 🚀 Using it
 
@@ -37,14 +38,14 @@ Kept from upstream: visual keyboard layout, global lighting (mode, brightness, s
 
 1. Open the app at [rk-config.tristandolfo.workers.dev](https://rk-config.tristandolfo.workers.dev), or run it locally (see [For developers](#-for-developers)).
 2. Click **Connect keyboard** and pick the keyboard in the browser dialog. Connecting sends nothing.
-3. Stage edits on the **Key Mapping** or **Lighting** tab. The pending bar shows how many changes are waiting.
-4. Press **Apply to keyboard** on that tab, or **Discard** to drop its pending edits without sending anything. Key Mapping then asks you to confirm: **Cancel** (focused first, also Escape) sends nothing and keeps your edits pending; **Send keymap (9 reports)** sends the whole map.
+3. Stage edits on the **Key Mapping** or **Lighting** tab. On Key Mapping, pick a key on the keyboard and set its new key or chord in the panel beside it; on Lighting, choose a mode and settings there, or paint key colors with the tools beside the keyboard. The floating Apply bar under the keyboard shows how many changes are waiting and what Apply sends.
+4. Press **Apply to keyboard** in that tab's Apply bar, or **Discard** to drop its pending edits without sending anything. Key Mapping then asks you to confirm: **Cancel** (focused first, also Escape) sends nothing and keeps your edits pending; **Send keymap (9 reports)** sends the whole map.
 
 Resetting a key or all keys to default is also staged; it only reaches the keyboard after Apply and the same confirmation. "Default" means the layout from RK's configuration file, sent as a normal whole-map write. It is not the keyboard's own hardware factory reset.
 
-**Resending lighting:** when no lighting edits are pending, the Lighting bar offers **Resend lighting** (the shown settings match what this browser last sent) or **Send shown lighting** (nothing was sent from this browser yet, so the shown settings are app defaults). Use it when the keyboard's lighting was changed elsewhere, for example by Fn shortcuts or a keyboard reset. It sends 1 report, or 8 (1 + 7) when the shown mode is the model's custom per-key mode, and never sends the keymap or touches pending key edits. Key Mapping has no equivalent: a keymap is sent only when key edits are pending or as **Retry Apply** after a failed transfer, always with confirmation.
+**Resending lighting:** when no lighting edits are pending, the Lighting tab's Apply bar offers **Resend lighting** (the shown settings match what this browser last sent) or **Send shown lighting** (nothing was sent from this browser yet, so the shown settings are app defaults). Use it when the keyboard's lighting was changed elsewhere, for example by Fn shortcuts or a keyboard reset. It sends 1 report, or 8 (1 + 7) when the shown mode is the model's custom per-key mode, and never sends the keymap or touches pending key edits. Key Mapping has no equivalent: a keymap is sent only when key edits are pending or as **Retry Apply** after a failed transfer, always with confirmation.
 
-**Try without a keyboard:** choose **Try the demo** (or **Try in demo** on any row of the model catalog) to explore a listed model. Apply is only simulated there: nothing is written to hardware or saved in the browser, and a demo apply never counts as evidence that a model works.
+**Try without a keyboard:** choose **Try the demo** (or **Try in demo** on any row of the model catalog) to explore a listed model; in the demo, **Switch keyboard** opens the same picker. Apply is only simulated there: nothing is written to hardware or saved in the browser, and a demo apply never counts as evidence that a model works.
 
 ### What Apply sends
 
@@ -116,7 +117,7 @@ The app is a static site with no backend, accounts, analytics or uploads. Config
 - A refusal message means the model or its protocol is not supported by this app
 
 **Changes not taking effect?**
-- Check the pending bar and its error or status message after Apply
+- Check the Apply bar and its error or status message after Apply
 - After a failed transfer, use **Retry Apply**; if lighting was changed on the keyboard itself, use **Resend lighting**
 
 ## 👨‍💻 For developers

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { getRKDevices } from '../utils/rkConfig';
 import { ConnectButton } from './ConnectButton';
 import { DemoPickerDialog } from './DemoPickerDialog';
-import { HeroKeyboard } from './HeroKeyboard';
+import { HeroKeyboard, type HeroBoard } from './HeroKeyboard';
 import { Button } from '@/components/ui/button';
 import { Check, CircleCheck, Cpu, ExternalLink, Keyboard, Lightbulb, Play, Search, TriangleAlert } from 'lucide-react';
 import { useDevices } from '../hooks/useDevices';
@@ -144,9 +144,10 @@ const SECTION_CLASS = 'scroll-mt-[90px] pt-24 max-sm:pt-16';
 
 interface HomePageProps {
   initialKeyboards?: Array<{ pid: string; name: string }>;
+  heroBoard: HeroBoard;
 }
 
-export function HomePage({ initialKeyboards }: HomePageProps = {}) {
+export function HomePage({ initialKeyboards, heroBoard }: HomePageProps) {
   const [keyboards, setKeyboards] = useState<Array<{ pid: string; name: string }>>(initialKeyboards || []);
   const [filterQuery, setFilterQuery] = useState('');
   const demoDialogRef = useRef<HTMLDialogElement>(null);
@@ -208,7 +209,7 @@ export function HomePage({ initialKeyboards }: HomePageProps = {}) {
         <p className="mt-3.5 text-[12.5px] text-muted-foreground">Desktop Chrome, Edge or Opera · USB cable · Mac, Windows, Linux</p>
         <div className="stage3d">
           <div className="tilt">
-            <HeroKeyboard />
+            <HeroKeyboard board={heroBoard} />
           </div>
         </div>
         <p className="float relative z-[5] -mt-[26px] inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-[13px] max-sm:mt-3 max-sm:items-start max-sm:rounded-[var(--radius)] max-sm:text-left">

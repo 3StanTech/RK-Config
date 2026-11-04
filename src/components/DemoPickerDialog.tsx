@@ -5,6 +5,8 @@ import { KeyboardSelector } from './KeyboardSelector';
 interface DemoPickerDialogProps {
   keyboards: Array<{ pid: string; name: string }>;
   onSelect: (pid: string) => void;
+  /** The demo keyboard already open (shown as current). */
+  currentPid?: string;
 }
 
 /**
@@ -12,7 +14,7 @@ interface DemoPickerDialogProps {
  * Esc and the close button dismiss it, and the browser returns focus to the opener.
  */
 export const DemoPickerDialog = forwardRef<HTMLDialogElement, DemoPickerDialogProps>(
-  function DemoPickerDialog({ keyboards, onSelect }, ref) {
+  function DemoPickerDialog({ keyboards, onSelect, currentPid }, ref) {
     const close = (e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.closest('dialog')?.close();
 
     return (
@@ -38,7 +40,7 @@ export const DemoPickerDialog = forwardRef<HTMLDialogElement, DemoPickerDialogPr
             is only simulated: nothing is written to hardware or saved in this browser, and a demo apply is never evidence
             that a model works.
           </p>
-          <KeyboardSelector keyboards={keyboards} onSelect={onSelect} showRandom={true} />
+          <KeyboardSelector keyboards={keyboards} onSelect={onSelect} currentPid={currentPid} showRandom={true} />
         </div>
       </dialog>
     );

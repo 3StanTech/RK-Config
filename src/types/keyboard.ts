@@ -1,4 +1,5 @@
 import type { KeyInfo } from './keycode';
+import type { BoardLayout } from '../utils/keyboardGeometry';
 
 /**
  * Type of keyboard lighting system
@@ -40,7 +41,7 @@ export interface KeyboardConfig {
   name: string;
   locale?: string; // Keyboard locale from device name (DE, FR, ES)
   keys: Key[];
-  imageUrl: string; // Full URL to keyboard image
+  layout: BoardLayout; // Key grid drawn from the key rects (keyboardGeometry)
   lightEnabled: boolean; // Has lighting support
   rgb: boolean; // true = RGB, false = single-color backlit (kept for backward compat)
   lightingType: LightingType; // Type of lighting system
@@ -53,5 +54,5 @@ export interface KeyboardConfig {
 export interface Key {
   bIndex: number;
   keyInfo: KeyInfo; // Reference to VK/firmware code/label info
-  rect: [number, number, number, number]; // [left, top, right, bottom] in image pixel coordinates
+  rect: [number, number, number, number]; // [left, top, right, bottom] in RK's KB.ini pixel coordinates
 }

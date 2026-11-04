@@ -6,15 +6,15 @@ import { SiteHeader } from './SiteHeader';
 import { SiteFooter } from './SiteFooter';
 import { DeviceProvider } from '../context/DeviceContext';
 import { ToastProvider } from '../context/ToastContext';
-import type { ImageManifest } from '../utils/buildImageManifest';
+import type { HeroBoard } from './HeroKeyboard';
 
 interface AppProps {
   initialKeyboards?: Array<{ pid: string; name: string }>;
-  imageManifest?: ImageManifest;
+  heroBoard: HeroBoard;
   ledManifest?: string;
 }
 
-function AppContent({ initialKeyboards, imageManifest }: AppProps = {}) {
+function AppContent({ initialKeyboards, heroBoard }: AppProps) {
   const device = useSelectedDevice();
   const { disconnectDevice } = useDevices();
   const mainRef = useRef<HTMLElement>(null);
@@ -37,16 +37,13 @@ function AppContent({ initialKeyboards, imageManifest }: AppProps = {}) {
 
       <main id="main-content" ref={mainRef} tabIndex={-1} className="outline-none">
         {!device ? (
-          <HomePage initialKeyboards={initialKeyboards} />
+          <HomePage initialKeyboards={initialKeyboards} heroBoard={heroBoard} />
         ) : (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <DeviceEditor
-              key={device.id}
-              device={device}
-              imageManifest={imageManifest}
-              onDisconnect={disconnectDevice}
-            />
-          </div>
+          <DeviceEditor
+            key={device.id}
+            device={device}
+            onDisconnect={disconnectDevice}
+          />
         )}
       </main>
 

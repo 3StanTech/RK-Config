@@ -18,8 +18,8 @@ import { TriangleAlert } from 'lucide-react';
 const BASE_KEYS = getSupportedBaseKeys();
 
 const KIND_CHIP: Record<ModifierInfo['kind'], string> = {
-  ctrl: '⌃ Control',
-  shift: '⇧ Shift',
+  ctrl: 'Ctrl',
+  shift: 'Shift',
   alt: '⌥ Option',
   gui: '⌘ Command',
 };
@@ -80,73 +80,67 @@ export function KeyChordComposer({ value, onChange, disabled = false }: KeyChord
   const previewCode = chord && !error ? encodeChord(chord) : special ? value : null;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h4 className="text-sm font-semibold text-card-foreground">Compose a key or chord</h4>
-        <span className="text-xs text-muted-foreground">Changes stage instantly · Apply sends them</span>
+    <div className="space-y-3">
+      <h3 className="flex flex-col gap-0.5 text-[13px] font-extrabold text-card-foreground">
+        Compose a key or chord
+        <small className="text-xs font-medium text-muted-foreground">Changes stage instantly · Apply sends them</small>
+      </h3>
+
+      <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Modifiers">
+        {MODIFIERS.map(m => {
+          const pressed = !!chord && (chord.modifiers & m.bit) !== 0;
+          return (
+            <button
+              key={m.id}
+              type="button"
+              aria-pressed={pressed}
+              title={`${m.side === 'left' ? 'Left' : 'Right'} ${KIND_CHIP[m.kind]}`}
+              disabled={disabled || special}
+              onClick={() => toggleModifier(m.bit)}
+              className={`h-[34px] rounded-full border text-[12.5px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                pressed
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background border-border hover:bg-accent text-foreground'
+              }`}
+            >
+              {m.side === 'left' ? 'L' : 'R'} {KIND_CHIP[m.kind]}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="space-y-2">
-        <span id="chord-modifiers-label" className="text-sm font-medium text-foreground">Modifiers</span>
-        <div className="flex flex-wrap gap-2" role="group" aria-labelledby="chord-modifiers-label">
-          {MODIFIERS.map(m => {
-            const pressed = !!chord && (chord.modifiers & m.bit) !== 0;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                aria-pressed={pressed}
-                disabled={disabled || special}
-                onClick={() => toggleModifier(m.bit)}
-                className={`min-h-9 px-3 py-1.5 text-xs border rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                  pressed
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-background border-border hover:bg-accent text-foreground'
-                }`}
-              >
-                {pressed && <span aria-hidden="true">✓ </span>}
-                {m.side === 'left' ? 'Left' : 'Right'} {KIND_CHIP[m.kind]}
-              </button>
-            );
-          })}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          GUI/Win bits are labeled ⌘ Command and Alt bits ⌥ Option. Left and right bits are kept separate and sent
-          exactly as chosen; the app does no automatic host swap. How macOS or Windows acts on them needs testing on
-          the keyboard.
-        </p>
+      <div className="grid gap-1.5 text-[13px]">
+        <label htmlFor="chord-base-key" className="text-foreground">Base key</label>
+        <select
+          id="chord-base-key"
+          value={chord?.base ?? ''}
+          onChange={e => setBase(e.target.value)}
+          disabled={disabled}
+          className="h-9 w-full rounded-full border border-input bg-background px-3 text-sm text-foreground disabled:opacity-50"
+        >
+          <option value="">{special ? '— special key —' : '(none — modifiers only)'}</option>
+          {BASE_KEYS.map(k => (
+            <option key={k.hid} value={k.hid}>{k.label}</option>
+          ))}
+        </select>
       </div>
 
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="space-y-1">
-          <label htmlFor="chord-base-key" className="text-sm font-medium text-foreground block">Base key</label>
-          <select
-            id="chord-base-key"
-            value={chord?.base ?? ''}
-            onChange={e => setBase(e.target.value)}
-            disabled={disabled}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground disabled:opacity-50"
-          >
-            <option value="">{special ? '— special key —' : '(none — modifiers only)'}</option>
-            {BASE_KEYS.map(k => (
-              <option key={k.hid} value={k.hid}>{k.label}</option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1">
-          <span className="text-sm font-medium text-foreground block">Result</span>
-          <span className="flex flex-wrap items-center gap-2">
-            <Badge className="font-mono text-sm px-3 py-1">{preview}</Badge>
-            {previewCode !== null && (
-              <Badge variant="secondary" className="font-mono text-xs">fw={fwHex(previewCode)}</Badge>
-            )}
-          </span>
-        </div>
+      <div className="flex flex-wrap items-center gap-2 text-[13px]">
+        <span className="text-muted-foreground">Result</span>
+        <Badge className="font-mono text-sm px-3 py-1">{preview}</Badge>
+        {previewCode !== null && (
+          <Badge variant="secondary" className="font-mono text-xs">fw={fwHex(previewCode)}</Badge>
+        )}
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        Left and right modifiers are sent exactly as chosen. There is no automatic Mac/Windows swap. GUI/Win bits are
+        labeled ⌘ Command and Alt bits ⌥ Option; how macOS or Windows acts on them needs testing on the keyboard.
+      </p>
 
       {warning && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-500/50 bg-amber-50 dark:bg-amber-950/40 px-3 py-2" role="status">
-          <TriangleAlert className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" aria-hidden="true" />
+        <div className="flex items-start gap-2 rounded-[var(--radius)] border border-[color-mix(in_srgb,#f59e0b_45%,transparent)] bg-[color-mix(in_srgb,#f59e0b_9%,transparent)] px-3 py-2" role="status">
+          <TriangleAlert className="h-4 w-4 mt-0.5 shrink-0 text-[#f59e0b]" aria-hidden="true" />
           <p className="text-sm text-card-foreground">{warning}</p>
         </div>
       )}

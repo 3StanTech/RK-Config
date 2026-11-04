@@ -2,14 +2,11 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import type { KeyboardDevice } from '../models/KeyboardDevice';
 import { KeyRemapper, KeyRemapperActionButton } from './KeyRemapper';
 import { LightingControls } from './LightingControls';
-import { KeyboardSelector } from './KeyboardSelector';
+import { DemoPickerDialog } from './DemoPickerDialog';
 import { PendingChanges, type ConfirmOption, type ResendOption } from './PendingChanges';
 import { useToast } from '../hooks/useToast';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { TriangleAlert, ExternalLink, ChevronDown } from 'lucide-react';
-import type { ImageManifest } from '../utils/buildImageManifest';
+import { Info, ExternalLink, ChevronDown, Keyboard, Sun, Check } from 'lucide-react';
 import { useDevices } from '../hooks/useDevices';
 import { useDeviceDraft, type DeviceDraft } from '../hooks/useDeviceDraft';
 import { getRKDevices } from '../utils/rkConfig';
@@ -18,24 +15,18 @@ import { firmwareCodeLabel } from '../utils/keyChords';
 import { isRKWebSoftwareSupported, RK_WEB_SOFTWARE_URL } from '../constants/rkWebSoftware';
 import type { ClassicCapabilities, DeviceFeature } from '../constants/deviceCapabilities';
 import { getFeatureEvidence, type EvidenceRecord } from '../constants/deviceEvidence';
+import { SLEEP_LABELS, SPEED_LABELS, toHex } from '../utils/lightingPalettes';
 
 type Tab = 'keys' | 'lighting';
 
-const SPEED_LABELS = ['Very Slow', 'Slow', 'Normal', 'Fast', 'Very Fast'];
-const SLEEP_LABELS = ['5 min', '10 min', '20 min', '30 min', 'Off'];
 
 interface DeviceEditorProps {
   device: KeyboardDevice;
-  imageManifest?: ImageManifest;
   onDisconnect: (device: KeyboardDevice) => Promise<void>;
 }
 
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`;
-}
-
-function hex(c: { r: number; g: number; b: number }): string {
-  return `#${[c.r, c.g, c.b].map(v => v.toString(16).padStart(2, '0')).join('')}`.toUpperCase();
 }
 
 /** Evidence text for one feature, from the evidence records; never claims more than recorded. */
@@ -79,6 +70,29 @@ function evidenceRows(device: KeyboardDevice, caps: ClassicCapabilities): Eviden
 
 function EvidenceAndStatus({ device, draft, hasRecord }: { device: KeyboardDevice; draft: DeviceDraft; hasRecord: boolean }) {
   const [open, setOpen] = useState(false);
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+
+  // The open panel covers the tabs: close it on Escape, an outside press, or focus leaving it
+  useEffect(() => {
+    if (!open) return;
+    const el = detailsRef.current;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setOpen(false);
+      el?.querySelector('summary')?.focus();
+    };
+    const onPointer = (e: PointerEvent) => { if (el && !el.contains(e.target as Node)) setOpen(false); };
+    const onFocusOut = (e: FocusEvent) => { if (el && !el.contains(e.relatedTarget as Node | null)) setOpen(false); };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointer);
+    el?.addEventListener('focusout', onFocusOut);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointer);
+      el?.removeEventListener('focusout', onFocusOut);
+    };
+  }, [open]);
+
   const isDemo = !!device.isDemo;
   const rows = evidenceRows(device, draft.capabilities);
   const available = rows.filter(r => r.available);
@@ -91,11 +105,12 @@ function EvidenceAndStatus({ device, draft, hasRecord }: { device: KeyboardDevic
       : verifiedCount === available.length
         ? 'Verified on hardware'
         : `Verified on hardware · ${plural(verifiedCount, 'feature')}`;
+  // Phase 1 badge treatment: theme foreground label, signal hue mixed into the background
   const badgeTone = isDemo
-    ? 'border-border text-muted-foreground'
+    ? 'border border-border'
     : verifiedCount > 0
-      ? 'border-green-500/50 bg-green-50 text-green-800 dark:bg-green-950/40 dark:text-green-300'
-      : 'border-amber-500/50 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200';
+      ? 'bg-[color-mix(in_srgb,#22c55e_10%,var(--background))]'
+      : 'border border-border';
 
   const { sentThisSession, notSaved, recovery } = draft;
   const sentAreas = [sentThisSession.keymap && 'Keymap', sentThisSession.lighting && 'Lighting'].filter(Boolean);
@@ -113,43 +128,41 @@ function EvidenceAndStatus({ device, draft, hasRecord }: { device: KeyboardDevic
             ? ['bg-green-500', 'Browser record of an earlier successful Apply · keyboard not read back']
             : ['bg-muted-foreground', 'Nothing sent from this browser yet · keyboard state unknown'];
 
+  const chip = 'inline-flex h-7 items-center gap-1.5 rounded-full px-[11px] text-xs font-semibold text-foreground';
+
   return (
-    <>
-      <div className="flex flex-wrap items-center gap-2 mt-3">
-        <button
-          type="button"
-          onClick={() => setOpen(o => !o)}
-          aria-expanded={open}
-          aria-controls="evidence-panel"
-          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium ${badgeTone}`}
-        >
+    <div className="flex flex-wrap items-center gap-1.5">
+      <details ref={detailsRef} className="relative" open={open} onToggle={e => setOpen(e.currentTarget.open)}>
+        <summary className={`${chip} ${badgeTone} cursor-pointer list-none [&::-webkit-details-marker]:hidden`} aria-controls="evidence-panel">
+          {!isDemo && verifiedCount > 0 && <Check className="size-3 text-[#16a34a]" aria-hidden="true" />}
           {badgeText}
           <ChevronDown className={`h-3 w-3 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
-        </button>
-        <span className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-0.5 text-xs font-medium text-foreground" aria-live="polite">
-          <span className={`h-2 w-2 rounded-full ${dot}`} aria-hidden="true" />
-          {writeText}
-        </span>
-      </div>
-      {open && (
-        <div id="evidence-panel" className="mt-4 pt-4 border-t border-border">
-          <dl className="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-2 text-sm">
+        </summary>
+        <div
+          id="evidence-panel"
+          className="absolute top-9 left-0 z-40 grid w-[min(420px,calc(100vw-48px))] gap-1.5 rounded-[calc(var(--radius)+4px)] border border-border bg-popover p-3.5 text-[13px] text-popover-foreground shadow-xl"
+        >
+          <dl className="grid grid-cols-[110px_1fr] gap-x-2 gap-y-1.5">
             {rows.map(r => (
               <div key={r.label} className="contents">
-                <dt className="font-medium text-card-foreground">{r.label}</dt>
+                <dt className="font-bold">{r.label}</dt>
                 <dd className="text-muted-foreground">{r.verified ? '✔ ' : ''}{r.text}</dd>
               </div>
             ))}
-            <dt className="font-medium text-card-foreground">Connection</dt>
+            <dt className="font-bold">Connection</dt>
             <dd className="text-muted-foreground">USB only · feature report 0x0A, 64-byte payload</dd>
           </dl>
-          <p className="text-xs text-muted-foreground mt-3">
+          <p className="text-xs text-muted-foreground mt-1.5">
             “Experimental” means the RK configuration files describe this feature; it has not been confirmed on a real{' '}
             {device.config.name} with this app yet.{isDemo ? ' Demo applies are simulations and never count as hardware verification.' : ''}
           </p>
         </div>
-      )}
-    </>
+      </details>
+      <span className={`${chip} border border-border`} aria-live="polite">
+        <span className={`h-[7px] w-[7px] rounded-full ${dot}`} aria-hidden="true" />
+        {writeText}
+      </span>
+    </div>
   );
 }
 
@@ -158,7 +171,7 @@ function SavedInBrowserCard({ device, draft, record }: { device: KeyboardDevice;
 
   let rows: Array<[string, React.ReactNode]>;
   if (isDemo) {
-    rows = [['Status', 'Demo — nothing is saved and nothing is written to hardware']];
+    rows = [['Status', 'Demo keyboard: nothing is saved in this browser.']];
   } else {
     const { notSaved, sentThisSession } = draft;
     const DEFAULTS = 'Not saved yet; controls use app defaults';
@@ -186,11 +199,11 @@ function SavedInBrowserCard({ device, draft, record }: { device: KeyboardDevice;
     const l = record?.lightingSettings ?? null;
     const modeName = l ? device.config.lightingModes.find(m => m.index === l.modeIndex)?.name ?? `Mode ${l.modeIndex}` : null;
     const lightText = l
-      ? `${modeName} · ${SPEED_LABELS[l.speed - 1]} · brightness ${l.brightness} · sleep ${SLEEP_LABELS[l.sleep - 1]} · ${l.randomColor ? 'random color' : hex(l.color)}`
+      ? `${modeName} · ${SPEED_LABELS[l.speed - 1]} · brightness ${l.brightness} · sleep ${SLEEP_LABELS[l.sleep - 1]} · ${l.randomColor ? 'random color' : toHex(l.color)}`
       : null;
     const pk = record?.perKeyColors ?? null;
     const pkText = pk
-      ? `${plural(new Set(Object.values(pk).map(hex)).size, 'distinct color')} across ${plural(Object.keys(pk).length, 'key')}`
+      ? `${plural(new Set(Object.values(pk).map(toHex)).size, 'distinct color')} across ${plural(Object.keys(pk).length, 'key')}`
       : null;
 
     const nothingSaved = !mapsText && !lightText && !pkText;
@@ -211,12 +224,11 @@ function SavedInBrowserCard({ device, draft, record }: { device: KeyboardDevice;
   const notSaved = draft.notSaved.keymap || draft.notSaved.lighting;
 
   return (
-    <Card>
-      <CardContent className="space-y-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="font-semibold text-card-foreground">Saved in this browser</h3>
-          <span className="text-xs text-muted-foreground">localStorage · one record per keyboard · no profiles</span>
-        </div>
+    <div className="space-y-2.5 text-[12.5px]">
+        <h3 className="flex flex-col gap-0.5 text-[13px] font-extrabold text-card-foreground">
+          Saved in this browser
+          <small className="text-xs font-medium text-muted-foreground">localStorage · one record per keyboard · no profiles</small>
+        </h3>
         {notSaved && (
           <p className="text-sm text-destructive">
             The last {draft.notSaved.keymap && draft.notSaved.lighting ? 'keymap and lighting applies were' : draft.notSaved.keymap ? 'keymap apply was' : 'lighting apply was'}{' '}
@@ -224,7 +236,7 @@ function SavedInBrowserCard({ device, draft, record }: { device: KeyboardDevice;
             reload will start from that older record or from app defaults.
           </p>
         )}
-        <dl className="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-2 text-sm">
+        <dl className="grid grid-cols-1 gap-y-1.5">
           {rows.map(([k, v]) => (
             <div key={k} className="contents">
               <dt className="font-medium text-card-foreground">{k}</dt>
@@ -237,15 +249,14 @@ function SavedInBrowserCard({ device, draft, record }: { device: KeyboardDevice;
           differ if it was changed elsewhere (Fn shortcuts, another computer, RK&apos;s software). Opening this page or
           reconnecting sends nothing.
         </p>
-      </CardContent>
-    </Card>
+    </div>
   );
 }
 
-export function DeviceEditor({ device, imageManifest, onDisconnect }: DeviceEditorProps) {
+export function DeviceEditor({ device, onDisconnect }: DeviceEditorProps) {
   const [activeTab, setActiveTab] = useState<Tab>('keys');
   const lightingTabVisitedRef = useRef(false);
-  const [showKeyboardSwitcher, setShowKeyboardSwitcher] = useState(false);
+  const demoDialogRef = useRef<HTMLDialogElement>(null);
   const [keyboards, setKeyboards] = useState<Array<{ pid: string; name: string }>>([]);
   const { switchDemoKeyboard } = useDevices();
   const toast = useToast();
@@ -280,8 +291,8 @@ export function DeviceEditor({ device, imageManifest, onDisconnect }: DeviceEdit
   }
 
   const handleSwitchKeyboard = async (pid: string) => {
+    demoDialogRef.current?.close();
     await switchDemoKeyboard(pid);
-    setShowKeyboardSwitcher(false);
   };
 
   const locked = draft.applying !== null || !device.connected;
@@ -352,7 +363,7 @@ export function DeviceEditor({ device, imageManifest, onDisconnect }: DeviceEdit
       areaName="key"
       count={draft.keymapPending}
       summary={plural(draft.keymapPending, 'key change')}
-      sends="the full keymap (9 reports)"
+      sends="the whole keymap (9 reports)"
       otherAreaNote={draft.lightingPending > 0
         ? `Your ${plural(draft.lightingPending, 'pending lighting change')} ${draft.lightingPending === 1 ? 'stays' : 'stay'} pending.`
         : undefined}
@@ -378,7 +389,7 @@ export function DeviceEditor({ device, imageManifest, onDisconnect }: DeviceEdit
   ].filter(Boolean).join(' · ');
   const lightingSendable = draft.settingsPending > 0 || (draft.colorsSendable && draft.colorsPending > 0);
   const lightingSends = draft.colorsSendable
-    ? 'lighting settings + per-key colors for every key (1 + 7 reports)'
+    ? 'lighting and per-key colors for every key (8 reports: 1 + 7)'
     : 'lighting settings (1 report)';
   // H3: explicit lighting-only resend of the shown settings when nothing is pending or failed.
   // No keymap equivalent (H2: whole-map writes have side effects).
@@ -430,199 +441,157 @@ export function DeviceEditor({ device, imageManifest, onDisconnect }: DeviceEdit
     />
   );
 
+  // Shared inspector panels under each view's own panels
+  const inspectorFooter = (
+    <>
+      {isRKWebSoftwareSupported(device.config.pid) && (
+        <p className="flex gap-2 text-xs text-muted-foreground">
+          <ExternalLink className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
+          <span>
+            This keyboard may also be supported by <a href={RK_WEB_SOFTWARE_URL} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">RK&apos;s official web configurator</a> (dated list, not verified here), which supports macros and media keys.
+          </span>
+        </p>
+      )}
+      <SavedInBrowserCard device={device} draft={draft} record={record} />
+    </>
+  );
+
   const keyRemapper = (
     <KeyRemapper
       device={device}
-      imageManifest={imageManifest}
       draftMappings={draft.mappings}
       onStage={draft.stageMapping}
       locked={locked}
       error={draft.errors.keymap}
       pendingBar={keymapBar}
+      resetButton={
+        <KeyRemapperActionButton
+          draftOverrideCount={draft.mappings.size}
+          onStageResetAll={draft.stageResetAllMappings}
+          disabled={locked}
+        />
+      }
+      inspectorFooter={inspectorFooter}
     />
   );
 
   const tabCount = (n: number) => n > 0 && (
     <span
-      className="ml-2 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-amber-600 px-1.5 text-xs text-white"
+      className="inline-grid h-5 min-w-5 place-items-center rounded-full bg-[#f59e0b] px-1.5 text-[11.5px] font-extrabold text-[#1a1205]"
       aria-label={`${n} pending`}
     >
       {n}
     </span>
   );
 
+  const tab = (id: Tab, label: string, Icon: typeof Sun, count: number) => (
+    <button
+      type="button"
+      onClick={() => setActiveTab(id)}
+      role="tab"
+      aria-selected={activeTab === id}
+      aria-controls={`${id}-panel`}
+      id={`${id}-tab`}
+      className={`inline-flex h-[38px] items-center gap-2 rounded-full px-4 text-sm font-bold whitespace-nowrap transition-colors ${
+        activeTab === id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      <Icon className="size-4" aria-hidden="true" />
+      {label}
+      {tabCount(count)}
+    </button>
+  );
+
+  const vid = device.hidDevice.vendorId.toString(16).toUpperCase().padStart(4, '0');
+
   return (
-    <div className="space-y-8">
-      {/* DEMO MODE WARNING BANNER */}
+    <div className="ed">
       {isDemo && (
-        <Alert className="bg-accent/50 border-accent">
-          <TriangleAlert className="h-5 w-5 text-accent-foreground" />
-          <AlertDescription className="text-accent-foreground">
-            <div className="flex flex-col gap-2">
-              <div className="font-bold text-base">DEMO MODE - No Keyboard Connected</div>
-              <div className="text-sm">
-                You are exploring the interface without a physical keyboard. All operations are simulated — changes are not saved and nothing is written to hardware.
-              </div>
-            </div>
-          </AlertDescription>
-        </Alert>
+        <p
+          role="status"
+          className="self-center inline-flex items-center gap-2.5 rounded-full border border-[color-mix(in_srgb,var(--accent-foreground)_18%,transparent)] bg-accent px-4 py-2 text-[13px] text-accent-foreground max-sm:rounded-[var(--radius)]"
+        >
+          <Info className="size-4 shrink-0" aria-hidden="true" />
+          <span><b>Demo mode, no keyboard connected.</b> All operations are simulated. Changes are not saved and nothing is written to hardware.</span>
+        </p>
       )}
 
-      {/* OFFICIAL RK WEB SOFTWARE BANNER */}
-      {isRKWebSoftwareSupported(device.config.pid) && (
-        <Alert className="border-primary/30 bg-primary/5">
-          <ExternalLink className="h-4 w-4 text-primary" />
-          <AlertDescription className="text-sm">
-            <p>This keyboard may also be supported by <a href={RK_WEB_SOFTWARE_URL} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">RK&apos;s official web configurator</a> (dated list, not verified here), which supports macros and media keys.</p>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <Card>
-        <CardContent>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">
-                {isDemo ? 'Demo Keyboard' : 'Connected Device'}
-              </p>
-              <h2 className="text-lg font-semibold text-card-foreground">
-                {device.config.name}
-                {isDemo && <span className="ml-2 text-sm font-medium text-primary">(DEMO)</span>}
-              </h2>
-              <p className="text-sm font-normal text-muted-foreground mt-1">
-                <span className="whitespace-nowrap">VID: {device.hidDevice.vendorId.toString(16).toUpperCase().padStart(4, '0')}</span>
-                {' · '}
-                <span className="whitespace-nowrap">PID: {device.config.pid.toUpperCase()}</span>
-              </p>
-              <EvidenceAndStatus device={device} draft={draft} hasRecord={hasRecord} />
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {isDemo && (
-                <Button
-                  onClick={() => setShowKeyboardSwitcher(!showKeyboardSwitcher)}
-                  variant="secondary"
-                  size="sm"
-                >
-                  Switch Keyboard
-                </Button>
-              )}
-              <Button
-                onClick={() => onDisconnect(device)}
-                variant="outline"
-                size="sm"
-              >
-                {isDemo ? 'Exit Demo' : 'Disconnect'}
-              </Button>
-            </div>
-          </div>
-
-          {/* Keyboard Switcher */}
-          {isDemo && showKeyboardSwitcher && (
-            <div className="mt-4 pt-4 border-t border-border">
-              <KeyboardSelector
-                keyboards={keyboards}
-                onSelect={handleSwitchKeyboard}
-                currentPid={device.config.pid}
-                showRandom={true}
-              />
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Tab switcher - only show if keyboard has lighting */}
-      {hasLighting && (
-        <Card className="overflow-visible">
-          <div className="flex flex-col items-center gap-3 py-4 px-6">
-            <div className="inline-flex bg-muted border border-border rounded-lg p-1 shrink-0" role="tablist" aria-label="Device configuration tabs">
-              <button
-                onClick={() => setActiveTab('keys')}
-                role="tab"
-                aria-selected={activeTab === 'keys'}
-                aria-controls="keys-panel"
-                id="keys-tab"
-                className={`px-6 py-2 text-sm font-medium rounded-md transition-all cursor-pointer whitespace-nowrap inline-flex items-center ${
-                  activeTab === 'keys'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                }`}
-              >
-                Key Mapping{tabCount(draft.keymapPending)}
-              </button>
-              <button
-                onClick={() => setActiveTab('lighting')}
-                role="tab"
-                aria-selected={activeTab === 'lighting'}
-                aria-controls="lighting-panel"
-                id="lighting-tab"
-                className={`px-6 py-2 text-sm font-medium rounded-md transition-all cursor-pointer whitespace-nowrap inline-flex items-center ${
-                  activeTab === 'lighting'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                }`}
-              >
-                Lighting{tabCount(draft.lightingPending)}
-              </button>
-            </div>
-            <p className="text-xs text-muted-foreground text-center">
-              Each tab applies separately. Switching tabs keeps pending changes and sends nothing.
+      <div className="flex flex-col items-start gap-3.5">
+        {/* Above the tabs and stage so the evidence popover is never covered; below the z-40 header */}
+        <div className="float relative z-30 flex flex-wrap items-center gap-3.5 py-2.5 pr-3 pl-4">
+          <div>
+            <p className="text-[11.5px] text-muted-foreground">{isDemo ? 'Demo keyboard' : 'Connected keyboard'}</p>
+            <h2 className="text-base font-extrabold tracking-[-0.01em]">{device.config.name}</h2>
+            <p className="font-mono text-[11.5px] text-muted-foreground">
+              <span className="whitespace-nowrap">VID {vid}</span>
+              {' · '}
+              <span className="whitespace-nowrap">PID {device.config.pid.toUpperCase()}</span>
             </p>
-            {activeTab === 'keys' && (
-              <KeyRemapperActionButton
-                draftOverrideCount={draft.mappings.size}
-                onStageResetAll={draft.stageResetAllMappings}
-                disabled={locked}
-              />
-            )}
           </div>
-          <CardContent>
-            <div
-              id="keys-panel"
-              role="tabpanel"
-              aria-labelledby="keys-tab"
-              className={activeTab === 'keys' ? '' : 'hidden'}
-            >
-              {keyRemapper}
-            </div>
-            {/* Lazy mount on first visit, then keep mounted; the draft lives above, so nothing is lost or sent */}
-            {lightingTabVisitedRef.current && (
-              <div
-                id="lighting-panel"
-                role="tabpanel"
-                aria-labelledby="lighting-tab"
-                className={activeTab === 'lighting' ? '' : 'hidden'}
-              >
-                <LightingControls
-                  device={device}
-                  imageManifest={imageManifest}
-                  draft={draft}
-                  hasLightingRecord={hasLightingRecord}
-                  locked={locked}
-                  pendingBar={lightingBar}
-                />
-              </div>
+          <EvidenceAndStatus device={device} draft={draft} hasRecord={hasRecord} />
+          <div className="flex items-center gap-1">
+            {isDemo && (
+              <Button onClick={() => demoDialogRef.current?.showModal()} variant="outline" size="sm" className="rounded-full font-bold">
+                Switch keyboard
+              </Button>
             )}
-          </CardContent>
-        </Card>
+            <Button onClick={() => onDisconnect(device)} variant="ghost" size="sm" className="rounded-full font-bold">
+              {isDemo ? 'Exit demo' : 'Disconnect'}
+            </Button>
+          </div>
+        </div>
+
+        {hasLighting && (
+          <div className="float inline-flex gap-1 rounded-full p-[5px]" role="tablist" aria-label="Device configuration tabs">
+            {tab('keys', 'Key Mapping', Keyboard, draft.keymapPending)}
+            {tab('lighting', 'Lighting', Sun, draft.lightingPending)}
+          </div>
+        )}
+      </div>
+
+      {hasLighting && (
+        <p className="text-center text-xs text-muted-foreground">
+          Each tab applies separately. Switching tabs keeps pending changes and sends nothing.
+        </p>
       )}
 
-      {/* No tabs if keyboard doesn't have lighting */}
-      {!hasLighting && (
-        <Card className="overflow-visible">
-          <div className="flex flex-col items-center gap-3 pt-4 px-6">
-            <KeyRemapperActionButton
-              draftOverrideCount={draft.mappings.size}
-              onStageResetAll={draft.stageResetAllMappings}
-              disabled={locked}
-            />
-          </div>
-          <CardContent>
-            {keyRemapper}
-          </CardContent>
-        </Card>
+      <div
+        id="keys-panel"
+        role={hasLighting ? 'tabpanel' : undefined}
+        aria-labelledby={hasLighting ? 'keys-tab' : undefined}
+        className="ed-view"
+        hidden={hasLighting && activeTab !== 'keys'}
+      >
+        {keyRemapper}
+      </div>
+      {/* Lazy mount on first visit, then keep mounted; the draft lives above, so nothing is lost or sent */}
+      {hasLighting && lightingTabVisitedRef.current && (
+        <div
+          id="lighting-panel"
+          role="tabpanel"
+          aria-labelledby="lighting-tab"
+          className="ed-view"
+          hidden={activeTab !== 'lighting'}
+        >
+          <LightingControls
+            device={device}
+            draft={draft}
+            hasLightingRecord={hasLightingRecord}
+            locked={locked}
+            pendingBar={lightingBar}
+            inspectorFooter={inspectorFooter}
+          />
+        </div>
       )}
 
-      <SavedInBrowserCard device={device} draft={draft} record={record} />
+      {isDemo && (
+        <DemoPickerDialog
+          ref={demoDialogRef}
+          keyboards={keyboards}
+          currentPid={device.config.pid}
+          onSelect={pid => { void handleSwitchKeyboard(pid); }}
+        />
+      )}
     </div>
   );
 }

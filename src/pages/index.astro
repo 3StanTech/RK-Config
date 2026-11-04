@@ -1,6 +1,6 @@
 ---
 import { getRKDevices } from '../utils/rkConfig.server';
-import { buildImageManifest } from '../utils/buildImageManifest';
+import { loadHeroBoard } from '../utils/heroBoard.server';
 import { buildLedManifest, serializeLedManifest } from '../utils/buildLedManifest';
 import App from '../components/App';
 import { defaultPresets, DEFAULT_THEME_PRESET } from '../utils/theme-presets';
@@ -9,7 +9,7 @@ import '../index.css';
 // Load keyboards and manifests at build time
 const devices = getRKDevices();
 const keyboards = Array.from(devices.entries()).map(([pid, name]) => ({ pid, name }));
-const imageManifest = await buildImageManifest();
+const heroBoard = loadHeroBoard();
 const ledManifest = buildLedManifest();
 const ledManifestJson = serializeLedManifest(ledManifest);
 // First-visit theme, inlined so the first paint matches what ThemeSelector applies after hydration
@@ -177,7 +177,7 @@ const structuredData = canonicalUrl && {
       Skip to main content
     </a>
     <div>
-      <App client:load initialKeyboards={keyboards} imageManifest={imageManifest} ledManifest={ledManifestJson} />
+      <App client:load initialKeyboards={keyboards} heroBoard={heroBoard} ledManifest={ledManifestJson} />
     </div>
   </body>
 </html>

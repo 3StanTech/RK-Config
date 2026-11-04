@@ -138,7 +138,10 @@ function ConfirmDialog({
   );
 }
 
-/** Sticky per-pane bar: pending count, what Apply sends, Discard and Apply. */
+/**
+ * Floating per-pane Apply bar: pending count, what Apply sends, Discard and Apply.
+ * Every line uses the card foreground: muted text on the floating surface falls below 4.5:1 in several presets.
+ */
 export function PendingChanges({
   count,
   summary,
@@ -183,47 +186,47 @@ export function PendingChanges({
     ? 'border-primary'
     : failed
       ? 'border-destructive'
-      : count > 0
-        ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40'
-        : 'border-border';
+      : '';
 
   return (
     <div
-      className={`sticky bottom-3 z-10 mt-6 rounded-xl border bg-card px-4 py-3 shadow-sm flex flex-wrap items-center justify-between gap-3 ${tone}`}
+      className={`ed-apply float flex flex-wrap items-center gap-x-3.5 gap-y-2 rounded-full py-2 pr-2 pl-2.5 max-[1100px]:rounded-[calc(var(--radius)+8px)] max-sm:px-3 max-sm:py-2.5 ${tone}`}
       role="region"
       aria-label={`Pending ${areaName} changes`}
     >
+      {busy ? (
+        <span className="grid size-9 flex-none place-items-center max-sm:size-[30px]" aria-hidden="true">
+          <Spinner size="sm" className="text-primary" />
+        </span>
+      ) : count > 0 && (
+        <span className="grid size-9 flex-none place-items-center rounded-full bg-[#f59e0b] font-extrabold text-[#1a1205] max-sm:size-[30px]" aria-hidden="true">
+          {count}
+        </span>
+      )}
       <div className="min-w-0 flex-1 space-y-0.5" aria-live="polite">
         {busy ? (
-          <div className="flex items-center gap-2">
-            <Spinner size="sm" className="text-primary" />
-            <div>
-              <p className="text-sm font-semibold text-card-foreground">Applying to keyboard… keep it plugged in</p>
-              <p className="text-xs text-muted-foreground">Sending {sends}. Editing is locked until it finishes.</p>
-            </div>
-          </div>
+          <>
+            <p className="text-sm font-extrabold text-card-foreground">Applying to keyboard… keep it plugged in</p>
+            <p className="text-[12.5px] text-card-foreground max-sm:hidden">Sending {sends}. Editing is locked until it finishes.</p>
+          </>
         ) : count > 0 ? (
           <>
-            <p className="text-sm font-semibold text-card-foreground">
-              <span className="mr-1.5 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-amber-600 px-1.5 text-xs text-white">
-                {count}
-              </span>
-              {summary} not sent yet
+            <p className="text-sm font-extrabold text-card-foreground">{summary} pending</p>
+            <p className="text-[12.5px] text-card-foreground max-sm:hidden">
+              Apply sends {sends}.{confirm ? ' You’ll be asked to confirm first.' : ''}
             </p>
-            <p className="text-xs text-muted-foreground">
-              Apply sends {sends} only.{confirm ? ' You’ll be asked to confirm first.' : ''}{otherAreaNote ? ` ${otherAreaNote}` : ''}
-            </p>
+            {otherAreaNote && <p className="text-[11.5px] text-card-foreground max-sm:hidden">{otherAreaNote}</p>}
           </>
         ) : activeResend ? (
           <>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-card-foreground">
               No pending {areaName} changes. {activeResend.lead}
-              {otherAreaNote ? ` ${otherAreaNote}` : ''}
             </p>
-            <p className="text-xs text-muted-foreground">{activeResend.detail}</p>
+            <p className="text-[12.5px] text-card-foreground">{activeResend.detail}</p>
+            {otherAreaNote && <p className="text-[11.5px] text-card-foreground max-sm:hidden">{otherAreaNote}</p>}
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-card-foreground">
             No pending {areaName} changes
             {failed
               ? ` — but the last ${areaName} transfer failed, so the keyboard may be partly updated. Retry Apply resends the last applied ${areaName} settings`
@@ -232,14 +235,13 @@ export function PendingChanges({
           </p>
         )}
         {!busy && (blockedReason || note) && (
-          <p className="text-xs text-muted-foreground">{blockedReason || note}</p>
+          <p className="text-xs text-card-foreground">{blockedReason || note}</p>
         )}
       </div>
-      <div className="flex gap-2 w-full sm:w-auto">
+      <div className="ml-2 flex gap-1.5 max-sm:ml-0 max-sm:w-full">
         <Button
-          variant="outline"
-          size="sm"
-          className="flex-1 sm:flex-none"
+          variant="ghost"
+          className="rounded-full max-sm:h-10 max-sm:flex-1"
           onClick={onDiscard}
           disabled={count === 0 || locked}
         >
@@ -247,9 +249,8 @@ export function PendingChanges({
         </Button>
         <Button
           ref={applyRef}
-          size="sm"
           variant={activeResend && !busy ? 'outline' : 'default'}
-          className="flex-1 sm:flex-none"
+          className="rounded-full font-bold max-sm:h-10 max-sm:flex-1"
           onClick={handleApplyClick}
           disabled={!canApply}
           aria-haspopup={confirm ? 'dialog' : undefined}

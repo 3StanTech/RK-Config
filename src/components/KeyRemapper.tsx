@@ -2,14 +2,12 @@ import { useState } from 'react';
 import { useToast } from '../hooks/useToast';
 import { type FirmwareCode } from '../types/keycode';
 import { getLocaleLabel, getLocalizedKeyName } from '../utils/localeLabels';
-import { KeyboardCanvas } from './KeyboardCanvas';
+import { KeyboardCanvas, KeyboardLegend } from './KeyboardCanvas';
 import { KeyChordComposer } from './KeyChordComposer';
 import { ApplyErrorAlert } from './PendingChanges';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import type { KeyboardDevice } from '../models/KeyboardDevice';
-import type { ImageManifest } from '../utils/buildImageManifest';
 import { decodeChord, firmwareCodeLabel } from '../utils/keyChords';
 import {
   getKeyboardLayout,
@@ -89,9 +87,10 @@ export function KeyRemapperActionButton({ draftOverrideCount, onStageResetAll, d
         disabled={disabled || draftOverrideCount === 0}
         variant="outline"
         size="sm"
+        className="ed-reset rounded-full bg-card"
         title="Stages RK's factory key assignments (not the keyboard's own reset); nothing is sent until Apply"
       >
-        Reset All Keys to Default
+        Reset all keys to default
       </Button>
 
       {showConfirmDialog && (
@@ -130,7 +129,6 @@ export function KeyRemapperActionButton({ draftOverrideCount, onStageResetAll, d
 
 interface KeyRemapperProps {
   device: KeyboardDevice;
-  imageManifest?: ImageManifest;
   /** Draft keymap (bIndex → override); absent keys use factory codes. */
   draftMappings: Map<number, FirmwareCode>;
   /** Stage an override, or undefined to stage the factory code. */
@@ -141,9 +139,14 @@ interface KeyRemapperProps {
   error: string | null;
   /** The pane's pending/apply bar. */
   pendingBar: React.ReactNode;
+  /** Stage tool under the keyboard (Reset all keys to default). */
+  resetButton: React.ReactNode;
+  /** Shared inspector panels after the key panels (RK web note, saved record). */
+  inspectorFooter: React.ReactNode;
 }
 
-export function KeyRemapper({ device, imageManifest, draftMappings, onStage, locked, error, pendingBar }: KeyRemapperProps) {
+/** Key Mapping view: keyboard on the stage, selected key and targets in the inspector. */
+export function KeyRemapper({ device, draftMappings, onStage, locked, error, pendingBar, resetButton, inspectorFooter }: KeyRemapperProps) {
   const [selectedKeyIndex, setSelectedKeyIndex] = useState<number | null>(null);
 
   const handleClearSelection = () => {
@@ -341,118 +344,91 @@ export function KeyRemapper({ device, imageManifest, draftMappings, onStage, loc
     );
   };
 
+  const pill = 'inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold';
+
   return (
-    <div className="space-y-6">
-      <ApplyErrorAlert message={error} />
+    <>
+      <div className="ed-stage">
+        <KeyboardCanvas
+          device={device}
+          onKeyClick={handleKeyClick}
+          selectedKeyIndex={selectedKeyIndex ?? undefined}
+          draftMappings={draftMappings}
+          ariaLabel={`${device.config.name} keys — choose a key to remap`}
+        />
+        <div className="ed-legend"><KeyboardLegend /></div>
+        {resetButton}
+      </div>
 
-      <KeyboardCanvas
-        device={device}
-        onKeyClick={handleKeyClick}
-        selectedKeyIndex={selectedKeyIndex ?? undefined}
-        imageManifest={imageManifest}
-        draftMappings={draftMappings}
-        ariaLabel={`${device.config.name} keys — choose a key to remap`}
-      />
-
-      <Card>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="font-bold text-card-foreground whitespace-nowrap">Selected Key:</h3>
-                {selectedKeyIndex !== null ? (
-                  <span className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline" className="font-mono text-base px-3 py-1">
-                      {defaultKeyLabel || 'Unknown'}
-                    </Badge>
-                    {draftOverride !== undefined && (
-                      <>
-                        <span className="text-lg text-muted-foreground">→</span>
-                        <Badge className="font-mono text-base px-3 py-1">
-                          {getKeyName(draftOverride, locale)}
-                        </Badge>
-                      </>
-                    )}
-                  </span>
-                ) : (
-                  <Badge variant="outline" className="font-mono text-base px-3 py-1 text-muted-foreground">
-                    None
-                  </Badge>
-                )}
+      <div className="ed-insp float" aria-label="Key inspector" role="region">
+        <ApplyErrorAlert message={error} />
+        <div>
+          <p className="text-xs text-muted-foreground">Selected key</p>
+          {selectedKeyIndex !== null ? (
+            <>
+              <p className="mt-1 mb-2 text-[22px] font-extrabold tracking-[-0.02em] text-card-foreground">
+                {defaultKeyLabel || 'Unknown'}
+                {draftOverride !== undefined && <> → {getKeyName(draftOverride, locale)}</>}
+              </p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {isPending ? (
+                  <span className={`${pill} bg-[color-mix(in_srgb,#f59e0b_12%,var(--background))] text-foreground`}>pending · not sent</span>
+                ) : appliedOverride !== undefined ? (
+                  <span className={`${pill} border border-border text-card-foreground`}>last sent</span>
+                ) : null}
+                <span className="font-mono text-[11px] text-muted-foreground">
+                  key {selectedKeyIndex} · code {defaultKeyInfo?.vk.toString(16).toUpperCase() || '?'}
+                  {defaultKeyInfo && <> · fw={fwHex(defaultKeyInfo.fw)}</>}
+                  {draftOverride !== undefined && <> → fw={fwHex(draftOverride)}</>}
+                </span>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {selectedKeyIndex !== null ? (
-                  <>
-                    <Badge variant="secondary" className="font-mono text-xs shrink-0">
-                      key: {selectedKeyIndex} code: {defaultKeyInfo?.vk.toString(16).toUpperCase() || '?'}
-                    </Badge>
-                    <span className="flex items-center gap-1.5 shrink-0">
-                      {defaultKeyInfo && (
-                        <Badge variant="secondary" className="font-mono text-xs shrink-0">
-                          fw={fwHex(defaultKeyInfo.fw)}
-                        </Badge>
-                      )}
-                      {draftOverride !== undefined && (
-                        <>
-                          <span className="text-xs text-muted-foreground">→</span>
-                          <Badge variant="secondary" className="font-mono text-xs shrink-0">
-                            fw={fwHex(draftOverride)}
-                          </Badge>
-                        </>
-                      )}
-                    </span>
-                    {isPending ? (
-                      <Badge className="text-xs bg-amber-500 text-white border-transparent">pending · not sent</Badge>
-                    ) : appliedOverride !== undefined ? (
-                      <Badge variant="outline" className="text-xs">last sent</Badge>
-                    ) : null}
-                  </>
-                ) : (
-                  <span className="text-xs text-muted-foreground">No key selected — click or Tab to a key, then press Enter</span>
-                )}
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:justify-end">
-              <Button
-                onClick={handleSetToDefault}
-                disabled={selectedKeyIndex === null || draftOverride === undefined || locked}
-                variant="secondary"
-                size="sm"
-                title="Stages the factory key; nothing is sent until Apply"
-              >
-                Set to Default
-              </Button>
-              <Button
-                onClick={handleClearSelection}
-                disabled={selectedKeyIndex === null}
-                variant="outline"
-                size="sm"
-              >
-                Clear Selection
-              </Button>
-            </div>
-          </div>
-
-          {selectedKeyIndex !== null && effectiveCode !== undefined && (
-            <div className="border-t border-border pt-4">
-              <KeyChordComposer
-                key={selectedKeyIndex}
-                value={effectiveCode}
-                onChange={stageTarget}
-                disabled={locked}
-              />
-            </div>
+            </>
+          ) : (
+            <>
+              <p className="mt-1 mb-2 text-[22px] font-extrabold tracking-[-0.02em] text-muted-foreground">None</p>
+              <p className="text-xs text-muted-foreground">No key selected — click or Tab to a key, then press Enter</p>
+            </>
           )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              onClick={handleSetToDefault}
+              disabled={selectedKeyIndex === null || draftOverride === undefined || locked}
+              variant="outline"
+              size="sm"
+              className="rounded-full"
+              title="Stages the factory key; nothing is sent until Apply"
+            >
+              Set to default
+            </Button>
+            <Button
+              onClick={handleClearSelection}
+              disabled={selectedKeyIndex === null}
+              variant="ghost"
+              size="sm"
+              className="rounded-full"
+            >
+              Clear selection
+            </Button>
+          </div>
+        </div>
 
-          <details className="border-t border-border pt-4">
-            <summary className="cursor-pointer text-sm font-medium text-card-foreground">
-              More targets — standard layout, navigation, numpad, media and special keys
-            </summary>
-            <p className="text-xs text-muted-foreground mt-2">
-              Picking a target stages it for the selected key and replaces any chord. Nothing is sent until Apply.
-            </p>
+        {selectedKeyIndex !== null && effectiveCode !== undefined && (
+          <KeyChordComposer
+            key={selectedKeyIndex}
+            value={effectiveCode}
+            onChange={stageTarget}
+            disabled={locked}
+          />
+        )}
+
+        <details>
+          <summary className="cursor-pointer text-[13px] font-semibold text-card-foreground">
+            More targets: standard layout, navigation, numpad, media and special keys
+          </summary>
+          <p className="text-xs text-muted-foreground mt-2">
+            Picking a target stages it for the selected key and replaces any chord. Nothing is sent until Apply.
+          </p>
           <div className="space-y-4 mt-4">
-            {/* Main Keyboard Layout - Only this scrolls horizontally */}
             <div>
               <h4 className="text-sm font-semibold mb-3 text-card-foreground">Standard Layout</h4>
               <div className="overflow-x-auto">
@@ -462,23 +438,20 @@ export function KeyRemapper({ device, imageManifest, draftMappings, onStage, loc
               </div>
             </div>
 
-            {/* Navigation & Numpad - Numpad wraps below nav */}
             <div>
               <h4 className="text-sm font-semibold mb-3 text-card-foreground">Navigation, Arrows & Numpad</h4>
-              <div className="flex flex-wrap gap-4 w-fit">
-                {/* Navigation Cluster */}
-                <div className="space-y-1">
-                  {NAVIGATION_CLUSTER.map((row, idx) => renderKeyboardRow(row, `nav-${idx}`))}
-                </div>
-
-                {/* Numpad */}
-                <div>
-                  {renderNumpadGrid()}
+              <div className="overflow-x-auto">
+                <div className="flex flex-wrap gap-4 w-fit">
+                  <div className="space-y-1">
+                    {NAVIGATION_CLUSTER.map((row, idx) => renderKeyboardRow(row, `nav-${idx}`))}
+                  </div>
+                  <div>
+                    {renderNumpadGrid()}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Media and Special Keys - Keys wrap within rows, don't shrink */}
             <div>
               <h4 className="text-sm font-semibold mb-3 text-card-foreground">Media & Special Functions</h4>
               <div className="space-y-1">
@@ -486,33 +459,34 @@ export function KeyRemapper({ device, imageManifest, draftMappings, onStage, loc
               </div>
             </div>
           </div>
-          </details>
-        </CardContent>
-      </Card>
+        </details>
 
-      <KeymapWriteWarning device={device} />
+        <KeymapWriteWarning device={device} />
+
+        {inspectorFooter}
+      </div>
 
       {pendingBar}
-    </div>
+    </>
   );
 }
 
 /**
- * H2 inline warning above the keymap pending bar. Observations are shown only
+ * H2 whole-keymap warning in the Key inspector. Observations are shown only
  * for the exact model where they were recorded; other boards get the untested variant.
  */
 function KeymapWriteWarning({ device }: { device: KeyboardDevice }) {
   const observed = device.config.pid.toLowerCase() === '0055';
   return (
     <div
-      className="flex items-start gap-3 rounded-md border border-amber-500/50 bg-amber-50 dark:bg-amber-950/40 px-4 py-3"
+      className="flex items-start gap-2.5 rounded-[var(--radius)] border border-[color-mix(in_srgb,#f59e0b_45%,transparent)] bg-[color-mix(in_srgb,#f59e0b_9%,transparent)] p-3.5"
       role="note"
     >
-      <TriangleAlert className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" aria-hidden="true" />
-      <div className="space-y-1 text-sm text-card-foreground">
-        <p className="font-semibold">
+      <TriangleAlert className="h-[17px] w-[17px] mt-0.5 shrink-0 text-[#f59e0b]" aria-hidden="true" />
+      <div className="space-y-2 text-[12.5px] text-muted-foreground">
+        <p className="text-[13.5px] font-bold text-card-foreground">
           {observed
-            ? 'Apply writes the whole keymap — on this RK61 it turns off the keyboard’s own Mac switching'
+            ? 'Apply writes the whole keymap; on this RK61 it turns off the keyboard’s own Mac switching'
             : 'Apply writes the whole keymap'}
         </p>
         <p>
