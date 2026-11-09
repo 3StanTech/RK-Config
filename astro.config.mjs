@@ -3,8 +3,8 @@ import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 
-// No public site is chosen yet. Set SITE_URL (e.g. https://example.org) only for a
-// deployment you own; canonical and structured URL metadata are emitted only then.
+// Set SITE_URL for the deployment you own (production: https://rk-config.pages.dev).
+// Canonical and structured URL metadata are emitted only when it is set.
 const siteUrl = process.env.SITE_URL || undefined;
 
 // https://astro.build/config

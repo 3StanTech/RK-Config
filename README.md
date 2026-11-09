@@ -4,13 +4,13 @@
 
 RK Configurator is a modified version of [KludgeKnight](https://github.com/vinc3m1/kludgeknight) by Vince Mi (upstream project). It runs in your browser and talks to the keyboard over WebHID, and nothing is sent to a keyboard until you press **Apply**.
 
-**Live site: [rk-config.tristandolfo.workers.dev](https://rk-config.tristandolfo.workers.dev)**
+**Live site: [rk-config.pages.dev](https://rk-config.pages.dev)**
 
 Source for this modified version: [github.com/3StanTech/RK-Config](https://github.com/3StanTech/RK-Config).
 
 > ⚠️ **Disclaimer**: This is unofficial software and is not affiliated with, endorsed by, or connected to Royal Kludge in any way. Use at your own risk.
 
-> **Status**: First-release candidate. Key mapping, global lighting and per-key colors are verified on one RK61 (`258A:0055`) over USB only; no other model or connection is verified (see [Feature evidence](#feature-evidence)). It is hosted at [rk-config.tristandolfo.workers.dev](https://rk-config.tristandolfo.workers.dev), and its source is public at [3StanTech/RK-Config](https://github.com/3StanTech/RK-Config).
+> **Status**: First-release candidate. Key mapping, global lighting and per-key colors are verified on one RK61 (`258A:0055`) over USB only; no other model or connection is verified (see [Feature evidence](#feature-evidence)). It is hosted at [rk-config.pages.dev](https://rk-config.pages.dev), and its source is public at [3StanTech/RK-Config](https://github.com/3StanTech/RK-Config).
 
 ## ✨ What this version adds
 
@@ -36,7 +36,7 @@ Kept from upstream: global lighting (mode, brightness, speed, sleep, color), a d
 
 ### Steps
 
-1. Open the app at [rk-config.tristandolfo.workers.dev](https://rk-config.tristandolfo.workers.dev), or run it locally (see [For developers](#-for-developers)).
+1. Open the app at [rk-config.pages.dev](https://rk-config.pages.dev), or run it locally (see [For developers](#-for-developers)).
 2. Click **Connect keyboard** and pick the keyboard in the browser dialog. Connecting sends nothing.
 3. Stage edits on the **Key Mapping** or **Lighting** tab. On Key Mapping, pick a key on the keyboard and set its new key or chord in the panel beside it; on Lighting, choose a mode and settings there, or paint key colors with the tools beside the keyboard. The floating Apply bar under the keyboard shows how many changes are waiting and what Apply sends.
 4. Press **Apply to keyboard** in that tab's Apply bar, or **Discard** to drop its pending edits without sending anything. Key Mapping then asks you to confirm: **Cancel** (focused first, also Escape) sends nothing and keeps your edits pending; **Send keymap (9 reports)** sends the whole map.
@@ -142,13 +142,13 @@ Local builds emit no canonical or structured-data URLs; those are added only whe
 
 ### Hosting
 
-The public site is the static build served by Cloudflare Workers Static Assets (service `rk-config`). Workers Builds is connected to this repository: every push to `main` builds the site with `bun run build` (the `SITE_URL` build variable is set in the dashboard) and deploys it with `npx wrangler deploy`. No server-side rendering, database or other backend is involved.
+The public site is the static build served by Cloudflare Pages (project `rk-config`). Pages is connected to this repository: every push to `main` builds the site with `bun run build` and publishes `dist/`. The production build variable is `SITE_URL=https://rk-config.pages.dev`; Node.js and Bun use the versions pinned in `.node-version` and `package.json`. No server-side rendering, Pages Functions, database or other backend is involved.
 
 To deploy by hand instead, for example from a local checkout:
 
 ```bash
-SITE_URL=https://rk-config.tristandolfo.workers.dev bun run build
-npx --yes wrangler@4 deploy --name rk-config --assets ./dist --compatibility-date 2026-11-01
+SITE_URL=https://rk-config.pages.dev bun run build
+npx --yes wrangler@4 pages deploy ./dist --project-name rk-config --branch main
 ```
 
 The GitHub Pages workflow (`.github/workflows/deploy.yml`) is an unused alternative, not the current host; it runs only on manual dispatch and validates before deploying. Pull requests are checked by `pr-check.yml`.
